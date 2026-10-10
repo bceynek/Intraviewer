@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>Intraviewer — Interview with confidence</title>
+
+  <link rel="stylesheet" href="style.css">
+  <script src="script.js" defer></script>
+</head>
+
+<body>
+  <main>
+    <header class="site-header">
+      <a class="brand" href="./" aria-label="Intraviewer home">
+        <img class="site-logo" src="Intraviewer.png" alt="Intraviewer" width="1080" height="1080">
+      </a>
+      <span class="header-note">A little practice. A lot more confidence.</span>
+      <span class="product-tag">Your interview studio</span>
+    </header>
+    <div class="hero">
+      <div>
+        <p class="eyebrow">PREPARE. PRACTICE. PROGRESS.</p>
+        <h1>Your next chapter<br>starts with <span>confidence.</span></h1>
+        <p class="hero-description">Turn your experience into a story worth telling. Practice tailored interview questions and get feedback to make every answer stronger.</p>
+      </div>
+      <aside class="practice-note" aria-label="How practice works">
+        <span class="note-icon" aria-hidden="true">↗</span>
+        <h2>Small steps.<br>Stronger answers.</h2>
+        <p>5 personalized questions.<br>Space to practice at your pace.<br>Feedback you can build on.</p>
+      </aside>
+    </div>
+
+    <!-- Setup screen -->
+    <form id="setup-form">
+      <div class="form-heading full-width">
+        <div><p class="eyebrow">LET’S MAKE IT PERSONAL</p><h2>Set up your practice</h2></div>
+        <span class="subtle-tag">Built around you</span>
+      </div>
+      <div>
+        <label for="role">What role are you applying for?</label>
+        <input
+          type="text"
+          id="role"
+          name="role"
+          placeholder="Example: Marketing Intern"
+          maxlength="200"
+          required
+        >
+      </div>
+
+      <div>
+        <label for="experience">Experience level</label>
+        <select id="experience" name="experience" required>
+          <option value="">Choose your level</option>
+          <option value="internship">Student / Internship</option>
+          <option value="entry">Entry level</option>
+          <option value="mid">Mid level</option>
+          <option value="senior">Senior level</option>
+        </select>
+      </div>
+
+      <div class="full-width">
+        <label for="job-description">Job description (optional)</label>
+        <textarea
+          id="job-description"
+          name="job-description"
+          rows="6"
+          maxlength="10000"
+          placeholder="Paste the job description here"
+        ></textarea>
+      </div>
+
+      <div class="context-card">
+        <p class="eyebrow">01 / YOUR EXPERIENCE</p>
+        <h2>Bring your résumé</h2>
+        <p class="section-description">Optional context for more relevant questions.</p>
+        <label for="resume-file">Upload a résumé PDF</label>
+        <input id="resume-file" type="file" accept=".pdf,application/pdf" aria-describedby="resume-help">
+        <p id="resume-help">PDF up to 5 MB, maximum 20 pages. Scanned PDFs are not supported. Review the extracted text below before starting.</p>
+        <p id="resume-status" role="status"></p>
+        <label for="resume-text">Résumé text</label>
+        <textarea id="resume-text" rows="7" maxlength="20000" placeholder="Upload a PDF or paste your résumé here"></textarea>
+        <button id="clear-resume" type="button">Clear résumé</button>
+        <p>Your file is processed for text extraction and is not saved by the app. The text is sent to Gemini when you start interview practice and request feedback.</p>
+      </div>
+      <div class="context-card">
+        <p class="eyebrow">02 / YOUR STORY</p>
+        <h2>Polish your profile</h2>
+        <p class="section-description">Get a fresh perspective on your LinkedIn profile.</p>
+        <label for="linkedin-text">LinkedIn profile text</label>
+        <textarea id="linkedin-text" rows="7" maxlength="15000" placeholder="Paste your headline, About section, experience, and skills"></textarea>
+        <p>Paste your profile text above. This text is sent to Gemini for review and interview coaching.</p>
+        <button id="review-linkedin" type="button">Review LinkedIn profile</button>
+        <p id="linkedin-status" role="status"></p>
+        <div id="linkedin-review" style="white-space: pre-wrap" aria-live="polite"></div>
+      </div>
+      <div class="mode-field">
+        <label for="interview-mode">Interview mode</label>
+        <select id="interview-mode" name="interview-mode">
+          <option value="mock">
+            Mock Interview — feedback at the end
+          </option>
+          <option value="guided">
+            Guided Practice — feedback after each answer
+          </option>
+        </select>
+      </div>
+
+      <div class="start-action"><p>Ready when you are.</p><button type="submit">Start Practice</button></div>
+    </form>
+
+    <!-- Interview screen -->
+    <section id="interview-screen" hidden>
+      <p class="eyebrow">ONE ANSWER AT A TIME</p>
+      <h2>Practice Interview</h2>
+      <p id="question-text" aria-live="polite"></p>
+
+      <label for="answer">Your answer</label>
+      <textarea
+        id="answer"
+        rows="6"
+        maxlength="10000"
+        placeholder="Type your answer here..."
+      ></textarea>
+
+      <button id="submit-answer" type="button" disabled>
+        Submit Answer
+      </button>
+    </section>
+
+    <!-- Results screen -->
+    <section id="results-screen" hidden>
+      <p class="eyebrow">YOUR NEXT STEP FORWARD</p>
+      <h2>Your Interview Review</h2>
+      <p>Review your personalized feedback and answers below.</p>
+
+      <div id="answers-list"></div>
+
+      <button id="restart-button" type="button">
+        Practice Again
+      </button>
+    </section>
+    <footer><span>INTRAVIEWER</span><p>Show up prepared. Leave an impression.</p></footer>
+  </main>
+</body>
+</html>

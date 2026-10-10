@@ -89,3 +89,27 @@ using its text-to-speech API (https://elevenlabs.io/docs/api-reference/text-to-s
 The player supports pause, seek, and replay without generating audio again.
 Moving on or restarting stops playback. Voice errors leave written feedback available.
 API keys remain on the server. Audio stays in browser memory until you move on.
+
+## Career preparation studio
+
+The single-page studio now connects résumé review, LinkedIn review, typed pitch
+practice, and adaptive interviews. Navigate directly with `#resume`, `#linkedin`,
+`#pitch`, or `#interview`. Drafts and interview progress stay in memory while you
+navigate; refreshing still clears them. There is no authentication or server-side
+session storage. All AI actions use the existing server-side Gemini configuration.
+
+- Résumé PDFs populate an editable text source. `/api/resume-review` returns
+  grounded suggestions and before/after wording. Download exports the review as
+  plain text, not a reformatted résumé PDF.
+- `/api/pitch-review` reviews a typed introduction for a selected scenario and
+  target duration. It does not record audio or assess vocal delivery.
+- `/api/interview-followup` receives the conversation so far and probes incomplete
+  answers, with at most two follow-ups per core question. All round responses
+  reach guided/final coaching. Standard, behavioral, technical, and constructive
+  high-pressure styles are available.
+- Focus mode removes surrounding sections. Pause & leave returns to the document
+  workspace without clearing the interview; select Interview to return.
+
+The interface uses IBM Plex Sans with system fallbacks, CSS-only scroll motion,
+reduced-motion support, keyboard-operable document tabs, and responsive stacked
+workspaces. No frontend build step is needed.

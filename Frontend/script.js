@@ -40,6 +40,7 @@ resumeFile.addEventListener("change", async () => {
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || "Could not extract this PDF.");
     resumeText = result.resume_text;
+    document.getElementById("resume-text").value = resumeText;
     resumeStatus.textContent = result.truncated
       ? "Résumé ready. Only the first 20,000 characters will be used."
       : "Résumé ready. It will be used to personalize your interview.";
@@ -59,6 +60,11 @@ resumeFile.addEventListener("change", async () => {
 });
 clearResume.addEventListener("click", () => {
   resumeFile.value = resumeText = resumeStatus.textContent = "";
+  document.getElementById("resume-text").value = "";
+  document.getElementById("resume-review").textContent = "";
+  document.getElementById("download-resume").hidden = true;
+  document.getElementById("resume-empty").hidden = false;
+  document.getElementById("resume-review-status").textContent = "";
 });
 const linkedInReview = document.getElementById("review-linkedin");
 const linkedInText = document.getElementById("linkedin-text");
@@ -219,10 +225,15 @@ let loadingQuestions = false;
 let loadingAnswer = false;
 let loadingFeedback = false;
 let answerAccepted = false;
+let conversation = [];
+let roundTurns = [];
+let activePrompt = "";
 
 // Call the Python backend.
 async function postJSON(url, data) {
   let response;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 150000);
 
   try {
     response = await fetch(url, {
@@ -230,12 +241,16 @@ async function postJSON(url, data) {
       headers: {
         "Content-Type": "application/json"
       },
-      body: JSON.stringify(data)
+      body: JSON.stringify(data),
+      signal: controller.signal
     });
-  } catch {
+  } catch (error) {
+    if (error.name === "AbortError") throw new Error("The request timed out. Your text is still here; please try again.");
     throw new Error(
       "Could not reach the server. Make sure the Python server is running."
     );
+  } finally {
+    clearTimeout(timeout);
   }
 
   if (
@@ -300,6 +315,7 @@ setupForm.addEventListener("submit", async function (event) {
     resume_text: resumeText.trim(),
     linkedin_text: linkedInText.value.trim(),
     experience: document.getElementById("experience").value,
+    style: document.getElementById("interview-style").value,
     job_description: document
       .getElementById("job-description")
       .value.trim()
@@ -335,6 +351,9 @@ setupForm.addEventListener("submit", async function (event) {
 
     questions = result.questions;
     answers = [];
+    conversation = [];
+    roundTurns = [];
+    document.getElementById("transcript-copy").textContent = "";
     currentQuestion = 0;
 
     answersList.replaceChildren();
@@ -363,6 +382,10 @@ setupForm.addEventListener("submit", async function (event) {
 function showQuestion() {
   guidedNarrator.set();
   answerAccepted = false;
+  roundTurns = [];
+  activePrompt = questions[currentQuestion];
+  document.getElementById("transcript-copy").textContent = conversation.map(t => `INTERVIEWER\n${t.question}\n\nYOU\n${t.answer}`).join("\n\n—\n\n");
+  document.getElementById("session-progress").textContent = `QUESTION ${currentQuestion + 1} / 5 · ${interviewContext.style.toUpperCase()}`;
 
   questionText.textContent =
     `Question ${currentQuestion + 1} of ${questions.length}: ` +
@@ -414,12 +437,44 @@ submitButton.addEventListener("click", async function () {
     return;
   }
 
+  const turn = {question: activePrompt, answer};
+  if (roundTurns.length < 2) {
+    loadingAnswer = true;
+    submitButton.disabled = answerBox.disabled = true;
+    guidedFeedback.textContent = "Considering your response…";
+    try {
+      const result = await postJSON("/api/interview-followup", {
+        ...interviewContext, history: [...conversation, turn]
+      });
+      if (typeof result.question !== "string") throw new Error("No valid follow-up received. Try again.");
+      if (result.question.trim()) {
+        conversation.push(turn);
+        roundTurns.push(turn);
+        activePrompt = result.question;
+        questionText.textContent = result.question;
+        document.getElementById("session-progress").textContent = `QUESTION ${currentQuestion + 1} / 5 · FOLLOW-UP ${roundTurns.length}`;
+        document.getElementById("transcript-copy").textContent = conversation.map(t => `INTERVIEWER\n${t.question}\n\nYOU\n${t.answer}`).join("\n\n—\n\n");
+        answerBox.value = "";
+        guidedFeedback.textContent = "";
+        return;
+      }
+    } catch (error) {
+      guidedFeedback.textContent = error.message;
+      return;
+    } finally {
+      loadingAnswer = false;
+      answerBox.disabled = false;
+      submitButton.disabled = !answerBox.value.trim();
+      if (!interviewScreen.hidden) answerBox.focus();
+    }
+  }
   const entry = {
     question: questions[currentQuestion],
-    answer: answer
+    answer: [...roundTurns, turn].map(t => `${t.question}\n${t.answer}`).join("\n\n")
   };
 
   if (mode === "mock") {
+    conversation.push(turn);
     answers.push(entry);
     advanceQuestion();
     return;
@@ -438,6 +493,7 @@ submitButton.addEventListener("click", async function () {
     });
 
     const feedback = readFeedback(result);
+    conversation.push(turn);
 
     answers.push({
       ...entry,
@@ -585,4 +641,95 @@ restartButton.addEventListener("click", function () {
   setupForm.hidden = false;
 
   document.getElementById("role").focus();
+});
+
+// Navigation changes visibility, never the contents of a workflow.
+const profileTabs = [document.getElementById("resume-tab"), document.getElementById("linkedin-tab")];
+function selectProfile(name, focus = false) {
+  profileTabs.forEach((tab, index) => {
+    const selected = (name === "linkedin") === (index === 1);
+    tab.setAttribute("aria-selected", String(selected));
+    tab.tabIndex = selected ? 0 : -1;
+    document.getElementById(tab.getAttribute("aria-controls")).hidden = !selected;
+    if (selected && focus) tab.focus();
+  });
+}
+profileTabs.forEach((tab, index) => {
+  tab.addEventListener("click", () => selectProfile(index ? "linkedin" : "resume"));
+  tab.addEventListener("keydown", event => {
+    if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) {
+      event.preventDefault();
+      selectProfile(event.key === "Home" ? "resume" : event.key === "End" ? "linkedin" : index ? "resume" : "linkedin", true);
+    }
+  });
+});
+function routeToTool() {
+  const name = location.hash.slice(1);
+  if (name === "resume" || name === "linkedin") {
+    selectProfile(name);
+    document.getElementById("profile").scrollIntoView();
+  }
+  document.querySelectorAll("nav a").forEach(link => {
+    if (link.hash === location.hash) link.setAttribute("aria-current", "location");
+    else link.removeAttribute("aria-current");
+  });
+}
+window.addEventListener("hashchange", routeToTool);
+routeToTool();
+document.getElementById("resume-text").addEventListener("input", event => { resumeText = event.target.value; });
+
+function attachReview(formOrButton, endpoint, payload, statusId, resultId) {
+  const trigger = document.getElementById(formOrButton);
+  const isForm = trigger.tagName === "FORM";
+  trigger.addEventListener(isForm ? "submit" : "click", async event => {
+    event.preventDefault();
+    const button = isForm ? trigger.querySelector('button[type="submit"]') : trigger;
+    if (button.disabled) return;
+    const status = document.getElementById(statusId);
+    const output = document.getElementById(resultId);
+    const data = payload();
+    if (!(data.resume_text || data.pitch || "").trim()) {
+      status.textContent = resultId === "resume-review"
+        ? "Upload a résumé PDF first, then request a review."
+        : "Add your text first, then request a review.";
+      return;
+    }
+    button.disabled = true;
+    status.textContent = "Reading your words carefully… This may take up to two minutes.";
+    try {
+      output.textContent = readFeedback(await postJSON(endpoint, data));
+      status.textContent = "Review ready. Your source text is unchanged.";
+      if (resultId === "resume-review") {
+        document.getElementById("resume-empty").hidden = true;
+        document.getElementById("download-resume").hidden = false;
+      }
+    } catch (error) { status.textContent = error.message; }
+    finally { button.disabled = false; }
+  });
+}
+attachReview("review-resume", "/api/resume-review", () => ({resume_text: resumeText, role: document.getElementById("role").value.trim()}), "resume-review-status", "resume-review");
+attachReview("pitch-form", "/api/pitch-review", () => ({pitch: document.getElementById("pitch-text").value.trim(), scenario: document.getElementById("pitch-scenario").value, duration: Number(document.getElementById("pitch-duration").value), role: document.getElementById("role").value.trim()}), "pitch-status", "pitch-review");
+document.getElementById("pitch-text").addEventListener("input", event => {
+  const words = event.target.value.trim().split(/\s+/).filter(Boolean).length;
+  document.getElementById("pitch-count").textContent = `${words} word${words === 1 ? "" : "s"}`;
+});
+document.getElementById("download-resume").addEventListener("click", () => {
+  const url = URL.createObjectURL(new Blob([document.getElementById("resume-review").textContent], {type: "text/plain;charset=utf-8"}));
+  const link = document.createElement("a");
+  link.href = url; link.download = "intraviewer-resume-review.txt"; link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+});
+const focusToggle = document.getElementById("focus-toggle");
+focusToggle.addEventListener("click", () => {
+  const enabled = document.body.classList.toggle("focus-mode");
+  focusToggle.setAttribute("aria-pressed", String(enabled));
+  focusToggle.textContent = enabled ? "Exit focus mode" : "Focus mode";
+});
+document.getElementById("exit-interview").addEventListener("click", () => {
+  document.body.classList.remove("focus-mode");
+  focusToggle.setAttribute("aria-pressed", "false");
+  focusToggle.textContent = "Focus mode";
+  narrators.forEach(narrator => narrator.audio.pause());
+  location.hash = "profile";
+  document.getElementById("resume-tab").focus({preventScroll: true});
 });

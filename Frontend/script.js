@@ -11,7 +11,7 @@ const restartButton = document.getElementById("restart-button");
 const modeSelect = document.getElementById("interview-mode");
 const startButton = setupForm.querySelector('button[type="submit"]');
 const resumeFile = document.getElementById("resume-file");
-const resumeText = document.getElementById("resume-text");
+let resumeText = "";
 const resumeStatus = document.getElementById("resume-status");
 const clearResume = document.getElementById("clear-resume");
 let uploadingResume = false;
@@ -20,12 +20,12 @@ resumeFile.addEventListener("change", async () => {
   const file = resumeFile.files[0];
   if (!file || uploadingResume) return;
   if (!file.name.toLowerCase().endsWith(".pdf") || file.size > 5000000) {
-    resumeStatus.textContent = "Choose a PDF smaller than 5 MB. Existing résumé text was kept.";
+    resumeStatus.textContent = "Choose a PDF smaller than 5 MB. Your previous résumé was kept.";
     resumeFile.value = "";
     return;
   }
   uploadingResume = true;
-  resumeFile.disabled = resumeText.disabled = clearResume.disabled = true;
+  resumeFile.disabled = clearResume.disabled = true;
   startButton.disabled = true;
   resumeStatus.textContent = "Extracting résumé text…";
   const controller = new AbortController();
@@ -39,13 +39,13 @@ resumeFile.addEventListener("change", async () => {
     }
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || "Could not extract this PDF.");
-    resumeText.value = result.resume_text;
+    resumeText = result.resume_text;
     resumeStatus.textContent = result.truncated
-      ? "Imported the first 20,000 characters. Review and shorten the text if needed."
-      : "Résumé imported. Review the text before starting your interview.";
+      ? "Résumé ready. Only the first 20,000 characters will be used."
+      : "Résumé ready. It will be used to personalize your interview.";
   } catch (error) {
     resumeStatus.textContent = error.name === "AbortError"
-      ? "Upload timed out. Try again or paste your résumé text."
+      ? "Upload timed out. Try uploading your PDF again."
       : (error instanceof TypeError || error instanceof SyntaxError)
         ? "Could not reach the upload endpoint. Open http://127.0.0.1:8000 with Python running."
         : error.message;
@@ -53,12 +53,12 @@ resumeFile.addEventListener("change", async () => {
   } finally {
     clearTimeout(timeout);
     uploadingResume = false;
-    resumeFile.disabled = resumeText.disabled = clearResume.disabled = false;
+    resumeFile.disabled = clearResume.disabled = false;
     startButton.disabled = loadingQuestions || linkedInBusy;
   }
 });
 clearResume.addEventListener("click", () => {
-  resumeFile.value = resumeText.value = resumeStatus.textContent = "";
+  resumeFile.value = resumeText = resumeStatus.textContent = "";
 });
 const linkedInReview = document.getElementById("review-linkedin");
 const linkedInText = document.getElementById("linkedin-text");
@@ -214,7 +214,7 @@ setupForm.addEventListener("submit", async function (event) {
 
   interviewContext = {
     role: role,
-    resume_text: resumeText.value.trim(),
+    resume_text: resumeText.trim(),
     linkedin_text: linkedInText.value.trim(),
     experience: document.getElementById("experience").value,
     job_description: document

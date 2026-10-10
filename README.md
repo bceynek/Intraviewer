@@ -2,9 +2,9 @@
 
 ## Run locally
 
-Résumé upload: select a text-based PDF (up to 5 MB and 20 pages), review the
-extracted text, then start practice. You can also paste or edit up to 20,000
-characters directly. Scanned and password-protected PDFs are not supported.
+Résumé upload: select a text-based PDF (up to 5 MB and 20 pages), wait for the
+ready message, then start practice. Extracted text stays in browser memory and
+is not displayed; up to 20,000 characters are used. Scanned and password-protected PDFs are not supported.
 The app does not save the uploaded file. Résumé text is included in interview
 questions and feedback sent to Gemini. Use Clear résumé to remove it.
 

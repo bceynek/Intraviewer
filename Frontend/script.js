@@ -127,6 +127,89 @@ resultsScreen.insertBefore(feedbackHeading, answersList);
 resultsScreen.insertBefore(feedbackText, answersList);
 resultsScreen.insertBefore(retryButton, answersList);
 
+// Generated audio is reused for replay.
+const narrators = [];
+function createNarrator(feedback) {
+  const panel = document.createElement("div");
+  panel.hidden = true;
+  const button = document.createElement("button");
+  button.type = "button";
+  button.textContent = "Listen to feedback · Jawhny";
+  const audio = document.createElement("audio");
+  audio.controls = true;
+  audio.hidden = true;
+  audio.setAttribute("aria-label", "Feedback narration by Jawhny");
+  const status = document.createElement("p");
+  status.setAttribute("role", "status");
+  const note = document.createElement("p");
+  note.textContent = "Listen with Jawhny’s warm, professional, friendly voice. Feedback text is sent to ElevenLabs when you press Listen.";
+  panel.append(button, audio, status, note);
+  feedback.after(panel);
+  let text = "", url = null, controller = null;
+  const narrator = {
+    audio,
+    start() { button.click(); },
+    set(value = "") {
+      if (controller) controller.abort();
+      controller = null;
+      audio.pause();
+      audio.removeAttribute("src");
+      audio.load();
+      if (url) URL.revokeObjectURL(url);
+      url = null;
+      text = value;
+      panel.hidden = !value;
+      note.hidden = false;
+      audio.hidden = true;
+      button.hidden = false;
+      button.disabled = false;
+      status.textContent = "";
+    }
+  };
+  narrators.push(narrator);
+  audio.addEventListener("play", () => {
+    narrators.forEach(other => { if (other !== narrator) other.audio.pause(); });
+  });
+  button.addEventListener("click", async () => {
+    if (controller || !text) return;
+    note.hidden = true;
+    const pending = new AbortController();
+    controller = pending;
+    const timer = setTimeout(() => pending.abort(), 90000);
+    button.disabled = true;
+    status.textContent = "Preparing Jawhny’s narration…";
+    try {
+      const response = await fetch("/api/narrate", {
+        method: "POST", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({text}), signal: pending.signal
+      });
+      if (!response.ok) {
+        const result = await response.json().catch(() => ({}));
+        throw new Error(result.error || "Narration unavailable. Restart the backend and try again.");
+      }
+      const blob = await response.blob();
+      if (controller !== pending) return;
+      if (!blob.type.startsWith("audio/")) throw new Error("No audio received. Try again.");
+      url = URL.createObjectURL(blob);
+      audio.src = url;
+      audio.hidden = false;
+      button.hidden = true;
+      status.textContent = "";
+      try { await audio.play(); }
+      catch { if (controller === pending) status.textContent = "Press Play to hear your feedback."; }
+    } catch (error) {
+      if (controller === pending) status.textContent = error.name === "AbortError"
+        ? "Narration timed out. Please try again." : error.message;
+    } finally {
+      clearTimeout(timer);
+      if (controller === pending) { controller = null; button.disabled = false; }
+    }
+  });
+  return narrator;
+}
+const guidedNarrator = createNarrator(guidedFeedback);
+const finalNarrator = createNarrator(feedbackText);
+
 let questions = [];
 let answers = [];
 let currentQuestion = 0;
@@ -278,6 +361,7 @@ setupForm.addEventListener("submit", async function (event) {
 
 // Display one question.
 function showQuestion() {
+  guidedNarrator.set();
   answerAccepted = false;
 
   questionText.textContent =
@@ -362,6 +446,7 @@ submitButton.addEventListener("click", async function () {
 
     answerAccepted = true;
     guidedFeedback.textContent = feedback;
+    guidedNarrator.set(feedback);
     submitButton.hidden = true;
 
     nextButton.textContent =
@@ -403,6 +488,7 @@ function advanceQuestion() {
 
 // Display the saved answers.
 function showResults() {
+  guidedNarrator.set();
   interviewScreen.hidden = true;
   resultsScreen.hidden = false;
   answersList.replaceChildren();
@@ -441,6 +527,7 @@ function showResults() {
 async function getFeedback() {
   if (loadingFeedback) return;
 
+  finalNarrator.set();
   loadingFeedback = true;
   retryButton.hidden = true;
   restartButton.disabled = true;
@@ -459,6 +546,8 @@ async function getFeedback() {
     });
 
     feedbackText.textContent = readFeedback(result);
+    finalNarrator.set(feedbackText.textContent);
+    finalNarrator.start();
   } catch (error) {
     feedbackText.textContent = error.message;
     retryButton.hidden = false;
@@ -474,6 +563,7 @@ retryButton.addEventListener("click", getFeedback);
 restartButton.addEventListener("click", function () {
   if (loadingFeedback || loadingAnswer) return;
 
+  narrators.forEach(narrator => narrator.set());
   questions = [];
   answers = [];
   currentQuestion = 0;

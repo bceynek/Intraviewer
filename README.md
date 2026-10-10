@@ -72,3 +72,20 @@ practice across different roles, majors, and professions.
 - Teaches Linkedin Speak
 # Intraviewer
 # Intraviewer
+
+## Feedback narration
+
+Add `ELEVENLABS_API_KEY=your_key` to `dotenv.env` and restart the backend.
+Add **Jawhny — Warm, Professional, and Friendly** to My Voices in ElevenLabs.
+The backend searches your voices for Jawhny. To select the exact voice (or if your
+key lacks voice-list permissions), add `ELEVENLABS_VOICE_ID=the_voice_id` to
+`dotenv.env` and restart. Copy the ID from the voice in ElevenLabs.
+
+Guided feedback and the final review include a **Listen to feedback · Jawhny**
+button. Final feedback automatically starts narration when ready; guided feedback
+starts when you press Listen. Narration sends that feedback text to ElevenLabs
+to generate audio
+using its text-to-speech API (https://elevenlabs.io/docs/api-reference/text-to-speech/convert).
+The player supports pause, seek, and replay without generating audio again.
+Moving on or restarting stops playback. Voice errors leave written feedback available.
+API keys remain on the server. Audio stays in browser memory until you move on.

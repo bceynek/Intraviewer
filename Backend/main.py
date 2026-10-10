@@ -8,7 +8,7 @@ from urllib.parse import urlsplit
 
 import httpx
 from dotenv import load_dotenv
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, Response
 from google import genai
 from google.genai import errors, types
 from pydantic import BaseModel, Field, ValidationError
@@ -151,6 +151,53 @@ def questions():
         )
 
     return jsonify(result.model_dump())
+
+
+@app.post("/api/narrate")
+def narrate():
+    text = text_field(body(), "text", 10000)
+    key = os.getenv("ELEVENLABS_API_KEY", "").strip()
+    if not key:
+        return jsonify(error="Add ELEVENLABS_API_KEY to dotenv.env and restart the backend."), 503
+    try:
+        with httpx.Client(
+            base_url="https://api.elevenlabs.io", headers={"xi-api-key": key}, timeout=60
+        ) as client:
+            voice_id = os.getenv("ELEVENLABS_VOICE_ID", "").strip()
+            if not voice_id:
+                voices = client.get("/v2/voices", params={"search": "Jawhny", "page_size": 100})
+                voices.raise_for_status()
+                matches = [v for v in voices.json().get("voices", [])
+                           if v.get("name", "").lower().split(" - ")[0].strip() == "jawhny"
+                           or v.get("name", "").lower().startswith("jawhny ")]
+                if len(matches) != 1:
+                    return jsonify(error=(
+                        "Add Jawhny — Warm, Professional, and Friendly to My Voices in ElevenLabs, "
+                        "then set ELEVENLABS_VOICE_ID in dotenv.env to its voice ID and restart."
+                    )), 503
+                voice_id = matches[0]["voice_id"]
+            from urllib.parse import quote
+            audio = client.post(
+                f"/v1/text-to-speech/{quote(voice_id, safe='')}",
+                params={"output_format": "mp3_44100_128"},
+                json={"text": text, "model_id": "eleven_multilingual_v2",
+                      "voice_settings": {"stability": 0.5, "similarity_boost": 0.75,
+                                         "style": 0.0, "use_speaker_boost": True}},
+            )
+            audio.raise_for_status()
+            return Response(audio.content, mimetype="audio/mpeg", headers={"Cache-Control": "no-store"})
+    except httpx.HTTPStatusError as error:
+        message = {
+            401: "ElevenLabs could not authenticate your API key.",
+            403: "Your ElevenLabs key or plan does not have access to this voice. Check voice and text-to-speech permissions.",
+            404: "ElevenLabs could not find this voice. Check ELEVENLABS_VOICE_ID.",
+            429: "ElevenLabs quota or rate limit reached. Try again later.",
+        }.get(error.response.status_code, "ElevenLabs could not create narration. Please try again.")
+        return jsonify(error=message), 502
+    except httpx.TimeoutException:
+        return jsonify(error="ElevenLabs took too long. Please try again."), 504
+    except httpx.TransportError:
+        return jsonify(error="Could not connect to ElevenLabs. Please try again."), 502
 
 
 @app.post("/api/resume")

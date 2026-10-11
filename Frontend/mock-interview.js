@@ -189,6 +189,7 @@
     const type = event.detail.type;
     syncTranscript();
     if (type === "start") state("user_speaking", "Listening · microphone on");
+    if (type === "preview") call.querySelector("details").open = true;
     if (type === "result") el("state").textContent = "Speech detected · listening";
     if (type === "error") {
       dictationFailed = true;
@@ -201,7 +202,7 @@
       call.querySelector("details").open = true;
     }
     if (type === "end") {
-      if (finishing) { clearTimeout(stopTimeout); finishing = false; submitAnswer(); }
+      if (finishing) { clearTimeout(stopTimeout); finishing = false; if (!dictationFailed) submitAnswer(); else state("user_ready", "Transcription failed · retry or type your answer"); }
       else if (!dictationFailed) listen();
       else state("user_ready", answerBox.value.trim()
         ? "Transcription stopped · recognized words preserved"
@@ -235,7 +236,7 @@
         state("user_ready", "Transcription timed out");
         notice("Finalized words were preserved. Review your answer and select Done Answering again.");
         call.querySelector("details").open = true;
-      }, 6000);
+      }, 95000);
     } else submitAnswer();
   });
   async function submitAnswer() {
@@ -282,9 +283,8 @@
     el("mute").setAttribute("aria-pressed", String(muted));
     el("mute").textContent = muted ? "Unmute microphone" : "Mute microphone";
     if (muted) {
-      // Muting stops capture immediately; only finalized words are retained.
-      finishing = false;
-      stopListening();
+      // Stop capture and transcribe audio collected before muting.
+      if (recognition && !speechStopping) recognition.stop();
       if (responsePhase()) state("user_ready", "Microphone muted");
     } else { dictationFailed = false; if (responsePhase()) ready(); }
   });

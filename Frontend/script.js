@@ -265,8 +265,7 @@ let conversation = [];
 let roundTurns = [];
 let activePrompt = "";
 
-// Dictation appends finalized speech; unfinished words stay in a separate preview.
-const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+// Record audio and transcribe it through our server with Scribe v2.
 const speechPanel = document.createElement("div");
 speechPanel.className = "speech-controls";
 const speechButton = document.createElement("button");
@@ -280,13 +279,13 @@ const speechPreview = document.createElement("p");
 speechPreview.className = "help";
 const speechNote = document.createElement("p");
 speechNote.className = "help";
-speechNote.textContent = "Speak in English, then stop to review and submit. Your browser may send audio to its transcription service.";
+speechNote.textContent = "Live text uses browser speech recognition where supported and may be sent to its service. When recording stops, ElevenLabs Scribe v2 provides the final transcript. Maximum recording: 5 minutes.";
 speechPanel.prepend(speechButton);
 speechPanel.append(speechPreview, speechNote);
 answerBox.after(speechPanel);
 let recognition = null;
 let speechStopping = false;
-const speechAvailable = Boolean(SpeechRecognition) && window.isSecureContext;
+const speechAvailable = Boolean(window.MediaRecorder && navigator.mediaDevices?.getUserMedia) && window.isSecureContext;
 const speechReady = speechAvailable
   ? "Use your microphone or type your response."
   : "Speech-to-text is unavailable here. Try a supported browser on HTTPS or localhost, or type your response.";
@@ -312,89 +311,152 @@ function cancelDictation() {
   speechStatus.textContent = speechReady;
   syncSpeechControls();
 }
-speechButton.addEventListener("click", () => {
-  if (recognition) {
-    speechStopping = true;
-    speechButton.textContent = "Stopping…";
-    speechStatus.textContent = "Finishing transcription…";
-    syncSpeechControls();
-    recognition.stop();
-    return;
-  }
+speechButton.addEventListener("click", async () => {
+  if (recognition) { recognition.stop(); return; }
   if (!speechAvailable || loadingAnswer || answerAccepted || answerBox.disabled) return;
   narrators.forEach(narrator => narrator.stop());
-  const session = new SpeechRecognition();
-  session.lang = "en-US";
-  session.continuous = true;
-  session.interimResults = true;
-  recognition = session;
-  let failed = false;
-  let limitReached = false;
-  speechButton.textContent = "Stop recording";
-  speechButton.setAttribute("aria-pressed", "true");
-  speechStatus.textContent = "Requesting microphone access…";
-  syncSpeechControls();
-  session.onstart = () => {
-    if (recognition === session && !speechStopping) {
-      speechStatus.textContent = "Listening… Speak your response, then select Stop recording.";
-      notifyDictation("start");
-    }
+  let stream, recorder, timer, timeout, liveRecognition;
+  const originalAnswer = answerBox.value;
+  let liveValue = originalAnswer, liveShown = false, liveCommitted = "";
+  const stopLive = () => {
+    const previous = liveRecognition;
+    liveRecognition = null;
+    if (previous) previous.abort();
   };
-  session.onresult = event => {
-    if (recognition !== session) return;
-    let interim = "";
-    for (let i = event.resultIndex; i < event.results.length; i++) {
-      const result = event.results[i];
-      if (result.isFinal) {
-        const text = result[0].transcript.trim();
-        const combined = answerBox.value + (answerBox.value && !/\s$/.test(answerBox.value) ? " " : "") + text;
-        answerBox.value = combined.slice(0, answerBox.maxLength);
-        if (combined.length >= answerBox.maxLength) limitReached = true;
-      } else {
-        interim += result[0].transcript;
-      }
-    }
-    speechPreview.textContent = interim ? `Hearing: ${interim}` : "";
-    syncSpeechControls();
-    notifyDictation("result");
-    if (limitReached && !speechStopping) {
-      speechStopping = true;
-      syncSpeechControls();
-      session.stop();
-    }
-  };
-  session.onerror = event => {
-    if (recognition !== session) return;
-    failed = true;
-    const messages = {
-      "not-allowed": "Microphone access was denied. Allow it in your browser settings, or type your response.",
-      "service-not-allowed": "Speech recognition is blocked by your browser. You can still type your response.",
-      "audio-capture": "No microphone is available. Connect one and try again, or type your response.",
-      "network": "The transcription service could not connect. Check your connection and try again.",
-      "no-speech": "No speech was detected. Select Start speaking to try again."
+  const startLive = () => {
+    const BrowserRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!BrowserRecognition) return;
+    const live = new BrowserRecognition();
+    liveRecognition = live;
+    live.lang = "en-US";
+    live.continuous = true;
+    live.interimResults = true;
+    live.onresult = event => {
+      if (recognition !== session || liveRecognition !== live || speechStopping) return;
+      // Stop updating the field if the user has edited it themselves.
+      if (answerBox.value !== liveValue) { stopLive(); return; }
+      const words = Array.from(event.results, result => result[0].transcript.trim()).join(" ");
+      liveValue = [originalAnswer.trimEnd(), liveCommitted, words].filter(Boolean).join(" ").slice(0, answerBox.maxLength);
+      answerBox.value = liveValue;
+      liveShown = true;
+      speechPreview.textContent = "Live draft · Scribe will finalize this when you stop.";
+      notifyDictation("preview");
     };
-    speechStatus.textContent = messages[event.error] || "Speech recognition stopped. You can try again or type your response.";
-    notifyDictation("error", event.error);
+    live.onerror = () => {
+      stopLive();
+      speechPreview.textContent = "Live preview unavailable. Your recording will still be transcribed when you stop.";
+      notifyDictation("preview");
+    };
+    live.onend = () => {
+      if (recognition !== session || liveRecognition !== live || speechStopping) return;
+      liveCommitted = liveValue.slice(originalAnswer.trimEnd().length).trim();
+      try { live.start(); } catch { stopLive(); }
+    };
+    try { live.start(); } catch { stopLive(); }
   };
-  session.onend = () => {
+  let cancelled = false, size = 0;
+  const chunks = [];
+  const controller = new AbortController();
+  const release = () => {
+    clearTimeout(timer);
+    stopLive();
+    stream?.getTracks().forEach(track => track.stop());
+  };
+  const session = {
+    abort() {
+      cancelled = true;
+      controller.abort();
+      clearTimeout(timeout);
+      if (recorder?.state === "recording") recorder.stop();
+      release();
+    },
+    stop() {
+      if (speechStopping) return;
+      speechStopping = true;
+      stopLive();
+      speechButton.textContent = "Transcribing…";
+      speechStatus.textContent = "Scribe v2 is transcribing your recording…";
+      syncSpeechControls();
+      if (recorder?.state === "recording") recorder.stop();
+    }
+  };
+  const finish = () => {
+    release();
+    clearTimeout(timeout);
     if (recognition !== session) return;
     recognition = null;
     speechStopping = false;
     speechButton.textContent = "Start speaking";
     speechButton.setAttribute("aria-pressed", "false");
     speechPreview.textContent = "";
-    if (!failed) speechStatus.textContent = limitReached
-      ? "Response reached the 10,000-character limit. Review your text before submitting."
-      : "Recording stopped. Review your response, or select Start speaking to add more.";
     syncSpeechControls();
     notifyDictation("end");
   };
-  try { session.start(); }
-  catch {
-    cancelDictation();
-    speechStatus.textContent = "Could not start the microphone. Try again or type your response.";
-    notifyDictation("error");
-  }
+  const fail = error => {
+    if (recognition !== session) return;
+    speechStatus.textContent = error.name === "NotAllowedError"
+      ? "Microphone access was denied. Allow access or type your answer."
+      : error.name === "AbortError" ? "Transcription timed out. Please try again or type your answer."
+      : error.message || "Recording failed. Please try again or type your answer.";
+    notifyDictation("error", "transcription");
+  };
+  recognition = session;
+  speechButton.textContent = "Stop recording";
+  speechButton.setAttribute("aria-pressed", "true");
+  speechStatus.textContent = "Requesting microphone access…";
+  syncSpeechControls();
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({audio: {
+      echoCancellation: true, noiseSuppression: true, autoGainControl: true
+    }});
+    if (cancelled || recognition !== session) { release(); return; }
+    if (speechStopping) { finish(); return; }
+    const mimeType = ["audio/webm;codecs=opus", "audio/mp4", "audio/ogg;codecs=opus"]
+      .find(type => MediaRecorder.isTypeSupported(type));
+    recorder = new MediaRecorder(stream, {...(mimeType ? {mimeType} : {}), audioBitsPerSecond: 64000});
+    recorder.ondataavailable = event => {
+      if (event.data.size) { chunks.push(event.data); size += event.data.size; }
+      if (size >= 4500000 && !speechStopping) session.stop();
+    };
+    recorder.onerror = () => {
+      session.abort();
+      fail(new Error("Microphone recording failed. Please try again."));
+      finish();
+    };
+    recorder.onstop = async () => {
+      release();
+      if (cancelled || recognition !== session) return;
+      try {
+        const blob = new Blob(chunks, {type: recorder.mimeType});
+        if (!blob.size) throw new Error("No audio captured. Please try again.");
+        if (blob.size > 5000000) throw new Error("Recording is too large. Please record a shorter answer.");
+        const data = new FormData();
+        const extension = blob.type.includes("mp4") ? "mp4" : blob.type.includes("ogg") ? "ogg" : "webm";
+        data.append("audio", blob, `answer.${extension}`);
+        timeout = setTimeout(() => controller.abort(), 90000);
+        const response = await fetch("/api/transcribe", {method: "POST", body: data, signal: controller.signal});
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "Transcription failed. Please try again.");
+        if (recognition !== session) return;
+        if (typeof result.text !== "string" || !result.text.trim()) throw new Error("No speech detected. Please try again.");
+        const editedLiveDraft = liveShown && answerBox.value !== liveValue;
+        const base = liveShown ? originalAnswer : answerBox.value;
+        const combined = editedLiveDraft ? answerBox.value
+          : [base.trimEnd(), result.text.trim()].filter(Boolean).join(" ");
+        answerBox.value = combined.slice(0, answerBox.maxLength);
+        speechStatus.textContent = editedLiveDraft ? "Your edited draft was preserved. Review it before submitting." : combined.length > answerBox.maxLength
+          ? "Answer reached the character limit. Review your text before submitting."
+          : "Transcription ready. Review your answer before submitting.";
+        notifyDictation("result");
+      } catch (error) { fail(error); }
+      finally { finish(); }
+    };
+    recorder.start(1000);
+    startLive();
+    timer = setTimeout(() => session.stop(), 300000);
+    speechStatus.textContent = "Recording… Stop when finished to transcribe your answer.";
+    notifyDictation("start");
+  } catch (error) { fail(error); finish(); }
 });
 new MutationObserver(syncSpeechControls).observe(answerBox, {attributes: true, attributeFilter: ["disabled"]});
 window.addEventListener("pagehide", cancelDictation);

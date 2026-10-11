@@ -132,10 +132,14 @@ actual playback animates the image; captions use phrase estimates against the
 MP3 playhead because the narration endpoint supplies no word alignment. Delivered
 questions cannot replay. Failed or interrupted playback has a recovery action.
 
-Answers use the existing browser SpeechRecognition implementation. Select
+Answers use MediaRecorder and ElevenLabs Scribe v2 through `/api/transcribe`.
+Live draft text appears in supported browsers using Web Speech recognition; Scribe
+replaces the draft with the final transcript when recording stops. Browser preview
+errors do not stop the Scribe recording. Select
 **Done Answering** to finalize and submit: pauses do not automatically submit.
-Mute stops recognition; speech errors preserve finalized text and offer retry.
-Text entry remains available in browsers without speech recognition. Camera
+Mute stops recording and transcribes the audio captured so far. Errors preserve
+existing text and offer retry.
+Text entry remains available in browsers without microphone recording support. Camera
 tracks are local, optional, and released when disabled, when the tab is hidden,
 or when the call ends. This application does not record camera video.
 
@@ -187,3 +191,23 @@ frame inference, camera cleanup, and review/reset behavior. Use the same Chrome
 fake-device and debugging setup as the other browser tests. Real-user gaze and
 movement accuracy still require validation across cameras, lighting, glasses,
 and individual movement patterns; these are optional rehearsal suggestions.
+
+### Scribe v2 setup
+
+Set `ELEVENLABS_STT_API_KEY` in root `dotenv.env` with speech-to-text access enabled.
+This separate key stays on the backend. Narration continues to use `ELEVENLABS_API_KEY`. Restart with
+`.venv/bin/python Backend/main.py`, refresh the app on localhost or HTTPS, and
+allow microphone access. No additional SDK is required.
+
+Guided practice: Start speaking → Stop recording → review transcript → Get Feedback.
+Mock interview: speak after the question → Done Answering → wait for transcription.
+Recordings stop after five minutes; uploads are limited to 5 MB. The endpoint
+requests English transcription. Audio is sent to ElevenLabs and is not saved to
+disk by this app. ElevenLabs usage charges apply. Leaving the interview or hiding
+the tab cancels pending capture/transcription.
+
+Run backend tests with `.venv/bin/python -m unittest discover -s Backend -p 'test_*.py'`.
+Run `tests/scribe_browser.py` with headless Chrome on debugging port 9223 and fake
+media devices enabled to check recording, cancellation, and mock submission order.
+It uses a local transcription fixture and does not call ElevenLabs. The older
+`tests/mock_browser.py` speech fixtures still target Web Speech API.

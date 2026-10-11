@@ -270,6 +270,47 @@ def narrate():
         return jsonify(error="Could not connect to ElevenLabs. Please try again."), 502
 
 
+@app.post("/api/transcribe")
+def transcribe():
+    upload = request.files.get("audio")
+    if upload is None:
+        return jsonify(error="Attach a microphone recording."), 400
+    allowed = {"audio/webm", "video/webm", "audio/mp4", "video/mp4", "audio/ogg", "audio/wav", "audio/mpeg"}
+    if upload.mimetype not in allowed:
+        return jsonify(error="Unsupported audio format."), 400
+    audio = upload.read(5_000_001)
+    if not audio or len(audio) > 5_000_000:
+        return jsonify(error="Recording must be nonempty and smaller than 5 MB."), 400
+    key = os.getenv("ELEVENLABS_STT_API_KEY", "").strip()
+    if not key:
+        return jsonify(error="Add ELEVENLABS_STT_API_KEY to dotenv.env and restart the backend."), 503
+    try:
+        with httpx.Client(timeout=75) as client:
+            response = client.post(
+                "https://api.elevenlabs.io/v1/speech-to-text",
+                headers={"xi-api-key": key},
+                data={"model_id": "scribe_v2", "language_code": "eng",
+                      "tag_audio_events": "false", "diarize": "false"},
+                files={"file": ("recording", audio, upload.mimetype)},
+            )
+            response.raise_for_status()
+            text = response.json().get("text")
+            if not isinstance(text, str):
+                return jsonify(error="ElevenLabs returned an invalid transcript."), 502
+            return jsonify(text=text), 200, {"Cache-Control": "no-store"}
+    except httpx.HTTPStatusError as error:
+        message = {
+            401: "ElevenLabs could not authenticate your API key.",
+            403: "Enable speech-to-text access for your ElevenLabs API key.",
+            429: "ElevenLabs quota or rate limit reached. Try again later.",
+        }.get(error.response.status_code, "ElevenLabs could not transcribe this recording. Try again.")
+        return jsonify(error=message), 502
+    except httpx.TimeoutException:
+        return jsonify(error="Transcription took too long. Please try again."), 504
+    except (httpx.TransportError, ValueError):
+        return jsonify(error="Could not receive a transcript from ElevenLabs. Try again."), 502
+
+
 @app.post("/api/resume")
 def upload_resume():
     upload = request.files.get("resume")

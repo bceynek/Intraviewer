@@ -545,19 +545,6 @@ audio {
   max-width:100%;
   margin-top:15px
 }
-.interview-voice-controls {
-  display:flex;
-  align-items:flex-start;
-  flex-wrap:wrap;
-  gap:16px
-}
-.interview-voice-controls>div {
-  min-width:0;
-  max-width:100%
-}
-.interview-voice-controls audio {
-  margin-top:0
-}
 .closing {
   border-top:1px solid var(--line);
   padding:70px 7%;

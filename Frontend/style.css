@@ -772,3 +772,36 @@ body.focus-mode .interview-workspace {
     transition:none!important
   }
 }
+
+.hero-title {
+  position:relative;
+}
+.hero-logo {
+  position:absolute;
+  right:2%;
+  top:50%;
+  transform:translateY(-50%);
+  width:18%;
+  height:85%;
+  overflow:hidden;
+  pointer-events:none;
+}
+.hero-logo img {
+  display:block;
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  object-position:50% 65%;
+  transform:scale(1.8);
+  transform-origin:50% 65%;
+}
+@media (max-width:750px) {
+  .hero-title h1 {
+    font-size:clamp(42px,10.5vw,79px);
+  }
+  .hero-logo {
+    right:0;
+    width:20%;
+    height:75%;
+  }
+}

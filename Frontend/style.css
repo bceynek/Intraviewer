@@ -375,6 +375,14 @@ input::file-selector-button {
   margin-right:12px;
   cursor:pointer
 }
+.answer-feedback section {
+  border-top:1px solid var(--line);
+  padding:16px 0;
+  overflow-wrap:anywhere;
+}
+.answer-feedback h3 { margin:0 0 8px; font-size:16px; }
+.answer-feedback p, .answer-feedback blockquote { margin:0; white-space:pre-wrap; }
+.answer-feedback blockquote { border-left:3px solid var(--blue); padding-left:16px; }
 .feedback-copy {
   white-space:pre-wrap;
   font-size:14px;

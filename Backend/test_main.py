@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 import httpx
 from google.genai import errors
-from main import app, Questions, Feedback
+from main import app, Questions, Feedback, AnswerFeedback
 
 
 class EndpointTests(unittest.TestCase):
@@ -33,12 +33,31 @@ class EndpointTests(unittest.TestCase):
 
     @patch('main.generate')
     def test_guided_feedback(self, generate):
-        generate.return_value = Feedback(feedback='Describe your contribution.')
+        generate.return_value = AnswerFeedback(
+            strongest_point='Names a concrete project.', biggest_improvement='Describe your contribution.',
+            quoted_example='I built a website.', suggested_rewrite='My project was building a website.')
         response = self.client.post('/api/answer-feedback', json={
             **self.context, 'question': 'Tell me about a project.', 'answer': 'I built a website.'
         })
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json['feedback'], 'Describe your contribution.')
+        self.assertEqual(response.json, generate.return_value.model_dump())
+        self.assertIs(generate.call_args.args[1], AnswerFeedback)
+
+    @patch('main.generate')
+    def test_guided_feedback_rejects_invented_quote(self, generate):
+        generate.return_value = AnswerFeedback(
+            strongest_point='A project.', biggest_improvement='Add evidence.',
+            quoted_example='I increased revenue.', suggested_rewrite='I built a website.')
+        response = self.client.post('/api/answer-feedback', json={
+            **self.context, 'question': 'Your project?', 'answer': 'I built a website.'})
+        self.assertEqual(response.status_code, 502)
+        self.assertNotIn('quoted_example', response.json)
+
+    def test_guided_feedback_rejects_blank_sections(self):
+        from pydantic import ValidationError
+        with self.assertRaises(ValidationError):
+            AnswerFeedback(strongest_point=' ', biggest_improvement='Add evidence.',
+                           quoted_example='My answer', suggested_rewrite='My revised answer')
 
     @patch('main.generate')
     def test_guided_feedback_requires_answer(self, generate):
@@ -58,6 +77,9 @@ class EndpointTests(unittest.TestCase):
         generate.return_value = Feedback(feedback='Helpful feedback')
         entry = {'question': 'A question?', 'answer': 'An answer'}
         for path, extra in [('/api/answer-feedback', entry), ('/api/feedback', {'answers': [entry] * 5})]:
+            generate.return_value = (AnswerFeedback(strongest_point='Clear.', biggest_improvement='Add evidence.',
+                quoted_example='An answer', suggested_rewrite='An answer')
+                if path == '/api/answer-feedback' else Feedback(feedback='Helpful feedback'))
             self.assertEqual(self.client.post(path, json={**background, **extra}).status_code, 200)
             self.assertIn('Built community projects', generate.call_args.args[0])
 

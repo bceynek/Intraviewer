@@ -15,6 +15,16 @@ let resumeText = "";
 const resumeStatus = document.getElementById("resume-status");
 const clearResume = document.getElementById("clear-resume");
 let uploadingResume = false;
+let resumeReviewVersion = 0;
+
+function invalidateResumeReview() {
+  resumeReviewVersion++;
+  document.getElementById("resume-review").textContent = "";
+  document.getElementById("download-resume").hidden = true;
+  document.getElementById("resume-empty").hidden = false;
+  document.getElementById("resume-review-status").textContent = "";
+  document.getElementById("review-resume").disabled = uploadingResume;
+}
 
 resumeFile.addEventListener("change", async () => {
   const file = resumeFile.files[0];
@@ -25,6 +35,7 @@ resumeFile.addEventListener("change", async () => {
     return;
   }
   uploadingResume = true;
+  invalidateResumeReview();
   resumeFile.disabled = clearResume.disabled = true;
   startButton.disabled = true;
   resumeStatus.textContent = "Extracting résumé text…";
@@ -54,6 +65,7 @@ resumeFile.addEventListener("change", async () => {
   } finally {
     clearTimeout(timeout);
     uploadingResume = false;
+    document.getElementById("review-resume").disabled = false;
     resumeFile.disabled = clearResume.disabled = false;
     startButton.disabled = loadingQuestions || linkedInBusy;
   }
@@ -61,10 +73,7 @@ resumeFile.addEventListener("change", async () => {
 clearResume.addEventListener("click", () => {
   resumeFile.value = resumeText = resumeStatus.textContent = "";
   document.getElementById("resume-text").value = "";
-  document.getElementById("resume-review").textContent = "";
-  document.getElementById("download-resume").hidden = true;
-  document.getElementById("resume-empty").hidden = false;
-  document.getElementById("resume-review-status").textContent = "";
+  invalidateResumeReview();
 });
 const linkedInReview = document.getElementById("review-linkedin");
 const linkedInText = document.getElementById("linkedin-text");
@@ -199,6 +208,39 @@ function createMessage(parent) {
 
 const setupStatus = createMessage(setupForm);
 const guidedFeedback = createMessage(interviewScreen);
+const guidedSections = document.createElement("div");
+guidedSections.className = "answer-feedback";
+guidedSections.hidden = true;
+guidedSections.setAttribute("aria-live", "polite");
+guidedFeedback.after(guidedSections);
+
+const answerFeedbackFields = [
+  ["strongest_point", "Strongest point"],
+  ["biggest_improvement", "Biggest improvement"],
+  ["quoted_example", "Example from your answer"],
+  ["suggested_rewrite", "Suggested rewrite"]
+];
+
+function renderAnswerFeedback(container, result) {
+  container.replaceChildren();
+  for (const [key, label] of answerFeedbackFields) {
+    const section = document.createElement("section");
+    const heading = document.createElement("h3");
+    heading.textContent = label;
+    const text = document.createElement(key === "quoted_example" ? "blockquote" : "p");
+    text.textContent = result[key];
+    section.append(heading, text);
+    container.appendChild(section);
+  }
+  container.hidden = false;
+}
+
+const tryAnswerAgain = document.createElement("button");
+tryAnswerAgain.type = "button";
+tryAnswerAgain.className = "quiet";
+tryAnswerAgain.textContent = "Try this answer again";
+tryAnswerAgain.hidden = true;
+interviewScreen.appendChild(tryAnswerAgain);
 
 const nextButton = document.createElement("button");
 nextButton.type = "button";
@@ -638,6 +680,9 @@ setupForm.addEventListener("submit", async function (event) {
 
 // Display one question.
 function showQuestion() {
+  guidedSections.hidden = true;
+  guidedSections.replaceChildren();
+  tryAnswerAgain.hidden = true;
   cancelDictation();
   guidedNarrator.set();
   answerAccepted = false;
@@ -701,7 +746,7 @@ submitButton.addEventListener("click", async function () {
 
   questionNarrator.stop();
   const turn = {question: activePrompt, answer};
-  if (roundTurns.length < 2) {
+  if (mode === "mock" && roundTurns.length < 2) {
     loadingAnswer = true;
     submitButton.disabled = answerBox.disabled = true;
     guidedFeedback.textContent = "Considering your response…";
@@ -734,7 +779,7 @@ submitButton.addEventListener("click", async function () {
   }
   const entry = {
     question: questions[currentQuestion],
-    answer: [...roundTurns, turn].map(t => `${t.question}\n${t.answer}`).join("\n\n")
+    answer: mode === "guided" ? answer : [...roundTurns, turn].map(t => `${t.question}\n${t.answer}`).join("\n\n")
   };
 
   if (mode === "mock") {
@@ -747,6 +792,7 @@ submitButton.addEventListener("click", async function () {
   loadingAnswer = true;
   submitButton.disabled = true;
   answerBox.disabled = true;
+  guidedSections.hidden = true;
   guidedFeedback.textContent =
     "Gemini is reviewing your answer...";
 
@@ -756,16 +802,21 @@ submitButton.addEventListener("click", async function () {
       ...entry
     });
 
-    const feedback = readFeedback(result);
+    if (answerFeedbackFields.some(([key]) => typeof result[key] !== "string" || !result[key].trim())) {
+      throw new Error("Incomplete feedback received. Please try again.");
+    }
+    const feedback = answerFeedbackFields.map(([key, label]) => `${label}\n${result[key]}`).join("\n\n");
     conversation.push(turn);
 
     answers.push({
       ...entry,
-      feedback: feedback
+      feedback: feedback,
+      structuredFeedback: result
     });
 
     answerAccepted = true;
-    guidedFeedback.textContent = feedback;
+    guidedFeedback.textContent = "Feedback ready. Revise your answer or continue to the next question.";
+    renderAnswerFeedback(guidedSections, result);
     guidedNarrator.set(feedback);
     submitButton.hidden = true;
 
@@ -775,6 +826,7 @@ submitButton.addEventListener("click", async function () {
         : "Next Question";
 
     nextButton.hidden = false;
+    tryAnswerAgain.hidden = false;
     nextButton.focus();
   } catch (error) {
     guidedFeedback.textContent = error.message;
@@ -785,6 +837,22 @@ submitButton.addEventListener("click", async function () {
     submitButton.disabled =
       answerAccepted || answerBox.value.trim() === "";
   }
+});
+
+tryAnswerAgain.addEventListener("click", () => {
+  if (mode !== "guided" || !answerAccepted || loadingAnswer) return;
+  // The revised attempt replaces this round in the final review.
+  answers.pop();
+  conversation.pop();
+  answerAccepted = false;
+  nextButton.hidden = tryAnswerAgain.hidden = true;
+  guidedNarrator.set();
+  guidedFeedback.textContent = "Edit your answer below using the feedback, then get a fresh review.";
+  answerBox.disabled = false;
+  submitButton.hidden = false;
+  submitButton.textContent = "Get Feedback";
+  syncSpeechControls();
+  answerBox.focus();
 });
 
 nextButton.addEventListener("click", function () {
@@ -830,7 +898,12 @@ function showResults() {
 
     card.append(heading, question, response);
 
-    if (item.feedback) {
+    if (item.structuredFeedback) {
+      const feedback = document.createElement("div");
+      feedback.className = "answer-feedback";
+      renderAnswerFeedback(feedback, item.structuredFeedback);
+      card.appendChild(feedback);
+    } else if (item.feedback) {
       const feedback = document.createElement("p");
       feedback.textContent = item.feedback;
       feedback.style.whiteSpace = "pre-wrap";
@@ -944,7 +1017,10 @@ function routeToTool() {
 }
 window.addEventListener("hashchange", routeToTool);
 routeToTool();
-document.getElementById("resume-text").addEventListener("input", event => { resumeText = event.target.value; });
+document.getElementById("resume-text").addEventListener("input", event => {
+  resumeText = event.target.value;
+  invalidateResumeReview();
+});
 
 function attachReview(formOrButton, endpoint, payload, statusId, resultId) {
   const trigger = document.getElementById(formOrButton);
@@ -963,16 +1039,23 @@ function attachReview(formOrButton, endpoint, payload, statusId, resultId) {
       return;
     }
     button.disabled = true;
+    const version = resumeReviewVersion;
+    const isCurrent = () => resultId !== "resume-review" || version === resumeReviewVersion;
     status.textContent = "Reading your words carefully… This may take up to two minutes.";
     try {
-      output.textContent = readFeedback(await postJSON(endpoint, data));
+      const result = await postJSON(endpoint, data);
+      if (!isCurrent()) return;
+      output.textContent = readFeedback(result);
       status.textContent = "Review ready. Your source text is unchanged.";
       if (resultId === "resume-review") {
         document.getElementById("resume-empty").hidden = true;
         document.getElementById("download-resume").hidden = false;
       }
-    } catch (error) { status.textContent = error.message; }
-    finally { button.disabled = false; }
+    } catch (error) {
+      if (isCurrent()) status.textContent = error.message;
+    } finally {
+      if (isCurrent()) button.disabled = false;
+    }
   });
 }
 attachReview("review-resume", "/api/resume-review", () => ({resume_text: resumeText, role: document.getElementById("role").value.trim()}), "resume-review-status", "resume-review");

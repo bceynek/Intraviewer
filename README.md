@@ -116,6 +116,14 @@ workspaces. No frontend build step is needed.
 
 ## Immersive Mock Interview
 
+Guided Practice returns immediate feedback in four sections: strongest point,
+biggest improvement, an exact quote from the answer, and a suggested rewrite.
+Select **Try this answer again** to edit your original response while referring
+to the feedback. The revised attempt replaces that round in the final review.
+`/api/answer-feedback` returns `strongest_point`, `biggest_improvement`,
+`quoted_example`, and `suggested_rewrite`; other review endpoints retain their
+existing response formats.
+
 Select **Mock interview**, set the role and experience, and use **Join Interview**.
 The pre-call panel offers a microphone input meter, a speaker test through the
 existing ElevenLabs endpoint, and an optional local camera preview. The call uses

@@ -48,6 +48,10 @@ class Handler(SimpleHTTPRequestHandler):
             elif self.path == '/api/interview-followup':
                 time.sleep(followup_delay)
                 result = {'question': ''}
+            elif self.path == '/api/answer-feedback':
+                result = {'strongest_point': 'You describe your work.',
+                          'biggest_improvement': 'Describe the tests you added.',
+                          'quoted_example': data['answer'], 'suggested_rewrite': 'I built and tested the feature.'}
             else:
                 result = {'feedback': 'Describe the tests you added and explain which failures they prevented.'}
             body, mime = json.dumps(result).encode(), 'application/json'

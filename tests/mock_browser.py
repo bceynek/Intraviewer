@@ -44,6 +44,10 @@ class Handler(SimpleHTTPRequestHandler):
             elif self.path == '/api/interview-followup':
                 time.sleep(followup_delay)
                 result = {'question': 'What did you personally change?' if len(data['history']) == 1 else ''}
+            elif self.path == '/api/answer-feedback':
+                result = {'strongest_point': 'You identify your contribution.',
+                          'biggest_improvement': 'Describe the tests you added.',
+                          'quoted_example': data['answer'], 'suggested_rewrite': 'My contribution was building the feature.'}
             else:
                 result = {'feedback': 'Describe the tests you added and explain which failures they prevented.'}
             body, mime = json.dumps(result).encode(), 'application/json'
@@ -231,12 +235,17 @@ try:
     wait("window.__speech?.active")
     js("window.__speech.finalize('I built the feature.'); speechButton.click()")
     wait('recognition === null')
-    click('submit-answer')
-    wait("document.getElementById('question-text').textContent === 'What did you personally change?'")
-    js("answerBox.value='I wrote the tests.'; answerBox.dispatchEvent(new Event('input'))")
+    followups_before = len([r for r in requests if r[0] == '/api/interview-followup'])
     click('submit-answer')
     wait('answerAccepted')
-    check("guidedFeedback.textContent.includes('Describe the tests') && !nextButton.hidden", 'guided follow-up and feedback still work')
+    check("guidedSections.textContent.includes('Describe the tests') && guidedSections.children.length === 4 && !nextButton.hidden", 'structured feedback appears after the first answer')
+    assert len([r for r in requests if r[0] == '/api/interview-followup']) == followups_before
+    js("tryAnswerAgain.click()")
+    check("!answerAccepted && !answerBox.disabled && answerBox.value.includes('I built the feature.') && nextButton.hidden", 'retry preserves an editable answer')
+    js("answerBox.value='I wrote regression tests.'; answerBox.dispatchEvent(new Event('input'))")
+    click('submit-answer')
+    wait('answerAccepted')
+    check("answers.length === 1 && conversation.length === 1 && answers[0].answer === 'I wrote regression tests.'", 'revised answer replaces the first attempt')
     # Mobile layout and reduced motion.
     cdp('Emulation.setDeviceMetricsOverride', {'width':390,'height':844,'deviceScaleFactor':1,'mobile':True})
     cdp('Emulation.setEmulatedMedia', {'features':[{'name':'prefers-reduced-motion','value':'reduce'}]})

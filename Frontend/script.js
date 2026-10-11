@@ -9,6 +9,30 @@ const resultsScreen = document.getElementById("results-screen");
 const answersList = document.getElementById("answers-list");
 const restartButton = document.getElementById("restart-button");
 const modeSelect = document.getElementById("interview-mode");
+
+const targetRoleInput = document.getElementById("role");
+function capitalizeTargetRole() {
+  const capitalize = text => text.replace(/(^|[\s-])(\p{L})/gu,
+    (_, separator, letter) => separator + letter.toUpperCase());
+  const value = targetRoleInput.value;
+  const formatted = capitalize(value);
+  if (value === formatted) return;
+  const start = targetRoleInput.selectionStart;
+  const end = targetRoleInput.selectionEnd;
+  const direction = targetRoleInput.selectionDirection;
+  targetRoleInput.value = formatted;
+  targetRoleInput.setSelectionRange(
+    capitalize(value.slice(0, start)).length,
+    capitalize(value.slice(0, end)).length,
+    direction
+  );
+}
+targetRoleInput.addEventListener("input", event => {
+  if (!event.isComposing) capitalizeTargetRole();
+});
+targetRoleInput.addEventListener("compositionend", capitalizeTargetRole);
+targetRoleInput.addEventListener("change", capitalizeTargetRole);
+
 const startButton = setupForm.querySelector('button[type="submit"]');
 const resumeFile = document.getElementById("resume-file");
 let resumeText = "";

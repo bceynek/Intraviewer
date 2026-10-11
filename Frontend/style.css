@@ -80,6 +80,18 @@ button:disabled {
   align-items:center;
   gap:10px
 }
+.brand-copy {
+  display:flex;
+  flex-direction:column;
+  gap:4px
+}
+.brand-tagline {
+  font-size:11px;
+  font-weight:400;
+  letter-spacing:0;
+  line-height:1.4;
+  color:var(--muted)
+}
 .site-logo {
   display:block;
   width:76px;

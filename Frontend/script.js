@@ -135,26 +135,35 @@ resultsScreen.insertBefore(retryButton, answersList);
 
 // Generated audio is reused for replay.
 const narrators = [];
-function createNarrator(feedback) {
+function createNarrator(feedback, kind = "feedback") {
   const panel = document.createElement("div");
   panel.hidden = true;
   const button = document.createElement("button");
   button.type = "button";
-  button.textContent = "Listen to feedback · Jawhny";
+  button.textContent = `Listen to ${kind} · Jawhny`;
   const audio = document.createElement("audio");
   audio.controls = true;
   audio.hidden = true;
-  audio.setAttribute("aria-label", "Feedback narration by Jawhny");
+  audio.setAttribute("aria-label", `${kind === "question" ? "Question" : "Feedback"} narration by Jawhny`);
   const status = document.createElement("p");
   status.setAttribute("role", "status");
   const note = document.createElement("p");
-  note.textContent = "Listen with Jawhny’s warm, professional, friendly voice. Feedback text is sent to ElevenLabs when you press Listen.";
+  note.textContent = kind === "question"
+    ? "Question text is sent to ElevenLabs for narration."
+    : "Listen with Jawhny’s warm, professional, friendly voice. Feedback text is sent to ElevenLabs when you press Listen.";
   panel.append(button, audio, status, note);
   feedback.after(panel);
   let text = "", url = null, controller = null;
   const narrator = {
     audio,
     start() { button.click(); },
+    stop() {
+      if (controller) controller.abort();
+      controller = null;
+      audio.pause();
+      button.disabled = false;
+      status.textContent = "";
+    },
     set(value = "") {
       if (controller) controller.abort();
       controller = null;
@@ -202,7 +211,7 @@ function createNarrator(feedback) {
       button.hidden = true;
       status.textContent = "";
       try { await audio.play(); }
-      catch { if (controller === pending) status.textContent = "Press Play to hear your feedback."; }
+      catch { if (controller === pending) status.textContent = `Press Play to hear the ${kind}.`; }
     } catch (error) {
       if (controller === pending) status.textContent = error.name === "AbortError"
         ? "Narration timed out. Please try again." : error.message;
@@ -215,6 +224,25 @@ function createNarrator(feedback) {
 }
 const guidedNarrator = createNarrator(guidedFeedback);
 const finalNarrator = createNarrator(feedbackText);
+const questionNarrator = createNarrator(questionText, "question");
+let questionVoicePaused = false;
+const voiceLabel = document.createElement("label");
+const questionVoice = document.createElement("input");
+questionVoice.type = "checkbox";
+questionVoice.checked = true;
+questionVoice.style.width = "auto";
+questionVoice.style.marginRight = "10px";
+voiceLabel.append(questionVoice, "Read mock interview questions aloud · ElevenLabs");
+questionText.before(voiceLabel);
+questionVoice.addEventListener("change", () => {
+  if (!questionVoice.checked) questionNarrator.stop();
+  else { questionVoicePaused = false; narrateQuestion(); }
+});
+function narrateQuestion() {
+  questionNarrator.set(mode === "mock" ? activePrompt : "");
+  voiceLabel.hidden = mode !== "mock";
+  if (mode === "mock" && questionVoice.checked && !questionVoicePaused) questionNarrator.start();
+}
 
 let questions = [];
 let answers = [];
@@ -349,6 +377,7 @@ setupForm.addEventListener("submit", async function (event) {
       );
     }
 
+    questionVoicePaused = false;
     questions = result.questions;
     answers = [];
     conversation = [];
@@ -384,6 +413,7 @@ function showQuestion() {
   answerAccepted = false;
   roundTurns = [];
   activePrompt = questions[currentQuestion];
+  narrateQuestion();
   document.getElementById("transcript-copy").textContent = conversation.map(t => `INTERVIEWER\n${t.question}\n\nYOU\n${t.answer}`).join("\n\n—\n\n");
   document.getElementById("session-progress").textContent = `QUESTION ${currentQuestion + 1} / 5 · ${interviewContext.style.toUpperCase()}`;
 
@@ -437,6 +467,7 @@ submitButton.addEventListener("click", async function () {
     return;
   }
 
+  questionNarrator.stop();
   const turn = {question: activePrompt, answer};
   if (roundTurns.length < 2) {
     loadingAnswer = true;
@@ -451,6 +482,7 @@ submitButton.addEventListener("click", async function () {
         conversation.push(turn);
         roundTurns.push(turn);
         activePrompt = result.question;
+        narrateQuestion();
         questionText.textContent = result.question;
         document.getElementById("session-progress").textContent = `QUESTION ${currentQuestion + 1} / 5 · FOLLOW-UP ${roundTurns.length}`;
         document.getElementById("transcript-copy").textContent = conversation.map(t => `INTERVIEWER\n${t.question}\n\nYOU\n${t.answer}`).join("\n\n—\n\n");
@@ -544,6 +576,7 @@ function advanceQuestion() {
 
 // Display the saved answers.
 function showResults() {
+  questionNarrator.set();
   guidedNarrator.set();
   interviewScreen.hidden = true;
   resultsScreen.hidden = false;
@@ -729,7 +762,8 @@ document.getElementById("exit-interview").addEventListener("click", () => {
   document.body.classList.remove("focus-mode");
   focusToggle.setAttribute("aria-pressed", "false");
   focusToggle.textContent = "Focus mode";
-  narrators.forEach(narrator => narrator.audio.pause());
+  questionVoicePaused = true;
+  narrators.forEach(narrator => narrator.stop());
   location.hash = "profile";
   document.getElementById("resume-tab").focus({preventScroll: true});
 });

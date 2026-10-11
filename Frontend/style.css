@@ -961,3 +961,8 @@ body.focus-mode .interview-workspace {
   #linkedin-review { padding:24px; }
   .linkedin-score-grid { grid-template-columns:1fr; }
 }
+
+#linkedin-practice-action { padding:0 30px 30px; }
+@media(max-width:750px) {
+  #linkedin-practice-action { padding:0 24px 24px; }
+}

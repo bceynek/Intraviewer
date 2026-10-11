@@ -145,7 +145,7 @@ try:
     check("linkedInResult.querySelectorAll('.linkedin-rewrite button').length === 1", 'only provided sections have copy buttons')
     js("window.__copied=''; navigator.clipboard.writeText=async text=>{window.__copied=text}; linkedInResult.querySelector('.linkedin-rewrite button').click()")
     wait("window.__copied === 'Web app builder | Student'")
-    js("linkedInResult.lastElementChild.click()")
+    click('practice-linkedin')
     check("location.hash === '#interview' && linkedInProfile === 'Student building web apps' && !setupForm.hidden", 'practice navigation preserves context and settings')
     js("modeSelect.value='guided'; setupForm.requestSubmit()")
     wait("!interviewScreen.hidden")
@@ -162,8 +162,9 @@ try:
     js("linkedInText.value='Student building web apps'; linkedInText.dispatchEvent(new Event('input'))")
     click('review-linkedin')
     wait("!linkedInResult.hidden")
-    js("linkedInResult.lastElementChild.click()")
+    click('practice-linkedin')
     join()
+    assert [data for path, data in requests if path == '/api/questions'][-1]['linkedin_text'] == 'Student building web apps'
     wait("!document.getElementById('mock-response').disabled")
     js("document.getElementById('mock-response').value='I built web apps with Python.'; document.getElementById('mock-response').dispatchEvent(new Event('input'))")
     click('mock-done')
@@ -173,6 +174,12 @@ try:
     wait("feedbackText.textContent.includes('Describe the tests')")
     assert any(path == '/api/feedback' and data.get('mode') == 'mock' and data['linkedin_text'] == 'Student building web apps' for path, data in requests)
     print('PASS mock questions and feedback preserve LinkedIn context')
+    load()
+    js("linkedInText.value='Student building web apps'; linkedInText.dispatchEvent(new Event('input'))")
+    click('review-linkedin')
+    wait("!linkedInPracticeAction.hidden")
+    js("linkedInText.value='Changed profile'; linkedInText.dispatchEvent(new Event('input'))")
+    check("linkedInPracticeAction.hidden && linkedInResult.hidden", 'editing profile hides stale results and practice action')
     assert not exceptions, exceptions
 finally:
     ws.close()

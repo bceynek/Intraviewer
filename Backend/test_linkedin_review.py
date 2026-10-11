@@ -35,3 +35,7 @@ class ReviewTests(unittest.TestCase):
         section = self.section("  ", 10)
         self.assertIsNone(section.score)
         self.assertIsNone(section.suggestion)
+
+    def test_insufficient_content_cannot_produce_rewrite(self):
+        section = self.section("Student", None)
+        self.assertIsNone(section.suggestion)

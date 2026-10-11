@@ -70,12 +70,17 @@ const linkedInReview = document.getElementById("review-linkedin");
 const linkedInText = document.getElementById("linkedin-text");
 const linkedInStatus = document.getElementById("linkedin-status");
 const linkedInResult = document.getElementById("linkedin-review");
+const linkedInPracticeAction = document.getElementById("linkedin-practice-action");
+const linkedInPractice = document.getElementById("practice-linkedin");
+let reviewedLinkedInProfile = "";
 let linkedInBusy = false;
 let linkedInProfile = linkedInText.value.trim();
 linkedInText.addEventListener("input", () => {
   linkedInProfile = linkedInText.value.trim();
   linkedInResult.replaceChildren();
   linkedInResult.hidden = true;
+  linkedInPracticeAction.hidden = true;
+  reviewedLinkedInProfile = "";
   linkedInStatus.textContent = "";
 });
 
@@ -134,19 +139,21 @@ function renderLinkedInReview(result, submittedProfile) {
       }
     });
   }
-  const practice = add(linkedInResult, "button", "Practice with This Profile");
-  practice.type = "button";
-  practice.addEventListener("click", () => {
-    linkedInProfile = submittedProfile;
-    location.hash = "interview";
-    document.getElementById("interview").scrollIntoView();
-    if (!setupForm.hidden) {
-      setupStatus.textContent = "Your LinkedIn profile is included. Choose your interview settings to begin.";
-      document.getElementById("role").focus({ preventScroll: true });
-    }
-  });
+  reviewedLinkedInProfile = submittedProfile;
   linkedInResult.hidden = false;
+  linkedInPracticeAction.hidden = false;
 }
+
+linkedInPractice.addEventListener("click", () => {
+  if (!reviewedLinkedInProfile || linkedInBusy) return;
+  linkedInProfile = reviewedLinkedInProfile;
+  location.hash = "interview";
+  document.getElementById("interview").scrollIntoView();
+  if (!setupForm.hidden) {
+    setupStatus.textContent = "Your LinkedIn profile is included. Choose your interview settings to begin.";
+    document.getElementById("role").focus({ preventScroll: true });
+  }
+});
 
 async function reviewLinkedIn() {
   if (linkedInBusy || loadingQuestions || uploadingResume) return;
@@ -160,6 +167,8 @@ async function reviewLinkedIn() {
   linkedInStatus.textContent = "Reviewing your profile… This may take up to two minutes.";
   linkedInResult.textContent = "";
   linkedInResult.hidden = true;
+  linkedInPracticeAction.hidden = true;
+  reviewedLinkedInProfile = "";
   const submittedProfile = linkedInText.value.trim();
   linkedInProfile = submittedProfile;
   try {

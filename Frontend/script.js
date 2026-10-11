@@ -67,7 +67,7 @@ resumeFile.addEventListener("change", async () => {
     uploadingResume = false;
     document.getElementById("review-resume").disabled = false;
     resumeFile.disabled = clearResume.disabled = false;
-    startButton.disabled = loadingQuestions || linkedInBusy;
+    startButton.disabled = loadingQuestions;
   }
 });
 clearResume.addEventListener("click", () => {
@@ -75,128 +75,6 @@ clearResume.addEventListener("click", () => {
   document.getElementById("resume-text").value = "";
   invalidateResumeReview();
 });
-const linkedInReview = document.getElementById("review-linkedin");
-const linkedInText = document.getElementById("linkedin-text");
-const linkedInStatus = document.getElementById("linkedin-status");
-const linkedInResult = document.getElementById("linkedin-review");
-const linkedInPracticeAction = document.getElementById("linkedin-practice-action");
-const linkedInPractice = document.getElementById("practice-linkedin");
-let reviewedLinkedInProfile = "";
-let linkedInBusy = false;
-let linkedInProfile = linkedInText.value.trim();
-linkedInText.addEventListener("input", () => {
-  linkedInProfile = linkedInText.value.trim();
-  linkedInResult.replaceChildren();
-  linkedInResult.hidden = true;
-  linkedInPracticeAction.hidden = true;
-  reviewedLinkedInProfile = "";
-  linkedInStatus.textContent = "";
-});
-
-function renderLinkedInReview(result, submittedProfile) {
-  linkedInResult.replaceChildren();
-  const add = (parent, tag, text, className) => {
-    const node = document.createElement(tag);
-    node.textContent = text;
-    if (className) node.className = className;
-    parent.appendChild(node);
-    return node;
-  };
-  add(linkedInResult, "h3", "Profile review");
-  add(linkedInResult, "p", result.overall_score == null
-    ? "Overall profile score: Not enough information to evaluate"
-    : `Overall profile score: ${result.overall_score} / 100`, "linkedin-overall");
-  add(linkedInResult, "p", "The overall score is the average of applicable section scores, scaled to 100. Missing sections are excluded.", "help");
-  const scores = add(linkedInResult, "div", "", "linkedin-score-grid");
-  const categories = [["headline", "Headline"], ["about", "About"], ["experience", "Experience"], ["skills", "Skills"]];
-  for (const [key, label] of categories) {
-    const section = result[key];
-    const card = add(scores, "div", "", "linkedin-card");
-    add(card, "h4", `${label}: ${section.score == null ? (section.original ? "Not scored" : "Not provided") : `${section.score} / 10`}`);
-    add(card, "p", section.explanation);
-  }
-  for (const [key, label] of [["strengths", "Strengths"], ["improvements", "Areas for improvement"]]) {
-    add(linkedInResult, "h4", label);
-    const list = add(linkedInResult, "ul", "");
-    result[key].forEach(item => add(list, "li", item));
-  }
-  add(linkedInResult, "h4", "Suggested rewrites");
-  for (const [key, label] of categories.slice(0, 3)) {
-    const section = result[key];
-    const card = add(linkedInResult, "div", "", "linkedin-card linkedin-rewrite");
-    add(card, "h4", label);
-    if (!section.original) {
-      add(card, "p", "Not provided");
-      continue;
-    }
-    add(card, "p", "Before", "eyebrow");
-    add(card, "p", section.original);
-    add(card, "p", "After", "eyebrow");
-    add(card, "p", section.suggestion || "Not enough information for a grounded rewrite.");
-    if (!section.suggestion) continue;
-    const copy = add(card, "button", "Copy Suggestion");
-    copy.type = "button";
-    copy.setAttribute("aria-label", `Copy ${label} suggestion`);
-    const status = add(card, "span", "");
-    status.setAttribute("role", "status");
-    copy.addEventListener("click", async () => {
-      try {
-        await navigator.clipboard.writeText(section.suggestion);
-        status.textContent = "Suggestion copied.";
-      } catch {
-        status.textContent = "Could not copy. Select the suggestion text and copy it manually.";
-      }
-    });
-  }
-  reviewedLinkedInProfile = submittedProfile;
-  linkedInResult.hidden = false;
-  linkedInPracticeAction.hidden = false;
-}
-
-linkedInPractice.addEventListener("click", () => {
-  if (!reviewedLinkedInProfile || linkedInBusy) return;
-  linkedInProfile = reviewedLinkedInProfile;
-  location.hash = "interview";
-  document.getElementById("interview").scrollIntoView();
-  if (!setupForm.hidden) {
-    setupStatus.textContent = "Your LinkedIn profile is included. Choose your interview settings to begin.";
-    document.getElementById("role").focus({ preventScroll: true });
-  }
-});
-
-async function reviewLinkedIn() {
-  if (linkedInBusy || loadingQuestions || uploadingResume) return;
-  if (!linkedInText.value.trim()) {
-    linkedInStatus.textContent = "Paste your profile text first.";
-    return;
-  }
-  linkedInBusy = true;
-  linkedInReview.disabled = startButton.disabled = true;
-  linkedInText.disabled = true;
-  linkedInStatus.textContent = "Reviewing your profile… This may take up to two minutes.";
-  linkedInResult.textContent = "";
-  linkedInResult.hidden = true;
-  linkedInPracticeAction.hidden = true;
-  reviewedLinkedInProfile = "";
-  const submittedProfile = linkedInText.value.trim();
-  linkedInProfile = submittedProfile;
-  try {
-    const result = await postJSON("/api/linkedin-review", {
-      linkedin_text: submittedProfile,
-      role: document.getElementById("role").value.trim()
-    });
-    renderLinkedInReview(result, submittedProfile);
-    linkedInStatus.textContent = "Profile review ready.";
-  } catch (error) {
-    linkedInStatus.textContent = error.message;
-  } finally {
-    linkedInBusy = false;
-    linkedInReview.disabled = startButton.disabled = false;
-    linkedInText.disabled = false;
-  }
-}
-linkedInReview.addEventListener("click", reviewLinkedIn);
-
 // Create feedback areas.
 function createMessage(parent) {
   const element = document.createElement("p");
@@ -594,7 +472,7 @@ function readFeedback(result) {
 setupForm.addEventListener("submit", async function (event) {
   event.preventDefault();
 
-  if (loadingQuestions || linkedInBusy || uploadingResume) return;
+  if (loadingQuestions || uploadingResume) return;
 
   const roleInput = document.getElementById("role");
   const role = roleInput.value.trim();
@@ -608,7 +486,6 @@ setupForm.addEventListener("submit", async function (event) {
   interviewContext = {
     role: role,
     resume_text: resumeText.trim(),
-    linkedin_text: linkedInProfile,
     experience: document.getElementById("experience").value,
     style: document.getElementById("interview-style").value,
     job_description: document
@@ -985,29 +862,9 @@ restartButton.addEventListener("click", function () {
 });
 
 // Navigation changes visibility, never the contents of a workflow.
-const profileTabs = [document.getElementById("resume-tab"), document.getElementById("linkedin-tab")];
-function selectProfile(name, focus = false) {
-  profileTabs.forEach((tab, index) => {
-    const selected = (name === "linkedin") === (index === 1);
-    tab.setAttribute("aria-selected", String(selected));
-    tab.tabIndex = selected ? 0 : -1;
-    document.getElementById(tab.getAttribute("aria-controls")).hidden = !selected;
-    if (selected && focus) tab.focus();
-  });
-}
-profileTabs.forEach((tab, index) => {
-  tab.addEventListener("click", () => selectProfile(index ? "linkedin" : "resume"));
-  tab.addEventListener("keydown", event => {
-    if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) {
-      event.preventDefault();
-      selectProfile(event.key === "Home" ? "resume" : event.key === "End" ? "linkedin" : index ? "resume" : "linkedin", true);
-    }
-  });
-});
 function routeToTool() {
   const name = location.hash.slice(1);
-  if (name === "resume" || name === "linkedin") {
-    selectProfile(name);
+  if (name === "resume") {
     document.getElementById("profile").scrollIntoView();
   }
   document.querySelectorAll("nav a").forEach(link => {
@@ -1084,5 +941,5 @@ document.getElementById("exit-interview").addEventListener("click", () => {
   questionVoicePaused = true;
   narrators.forEach(narrator => narrator.stop());
   location.hash = "profile";
-  document.getElementById("resume-tab").focus({preventScroll: true});
+  document.getElementById("resume-heading").focus({preventScroll: true});
 });

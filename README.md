@@ -65,11 +65,9 @@ practice across different roles, majors, and professions.
 - Voice interviews using ElevenLabs
 - Hints and answer retries
 - Follow-up questions based on user answers
-- Linked in checker
 - Elevator pitch
 - Professional answer rephrasing
 - Realistic Interview experience (presses tf outta u)
-- Teaches Linkedin Speak
 # Intraviewer
 # Intraviewer
 
@@ -92,8 +90,8 @@ API keys remain on the server. Audio stays in browser memory until you move on.
 
 ## Career preparation studio
 
-The single-page studio now connects résumé review, LinkedIn review, typed pitch
-practice, and adaptive interviews. Navigate directly with `#resume`, `#linkedin`,
+The single-page studio now connects résumé review, typed pitch
+practice, and adaptive interviews. Navigate directly with `#resume`,
 `#pitch`, or `#interview`. Drafts and interview progress stay in memory while you
 navigate; refreshing still clears them. There is no authentication or server-side
 session storage. All AI actions use the existing server-side Gemini configuration.
@@ -111,7 +109,7 @@ session storage. All AI actions use the existing server-side Gemini configuratio
   workspace without clearing the interview; select Interview to return.
 
 The interface uses IBM Plex Sans with system fallbacks, CSS-only scroll motion,
-reduced-motion support, keyboard-operable document tabs, and responsive stacked
+reduced-motion support, keyboard navigation, and responsive stacked
 workspaces. No frontend build step is needed.
 
 ## Immersive Mock Interview

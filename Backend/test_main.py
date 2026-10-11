@@ -69,8 +69,7 @@ class EndpointTests(unittest.TestCase):
 
     @patch('main.generate')
     def test_background_reaches_all_coaching_endpoints(self, generate):
-        background = {**self.context, 'linkedin_url': 'https://www.linkedin.com/in/example',
-                      'linkedin_text': 'Built community projects', 'resume_text': 'Studied biology'}
+        background = {**self.context, 'resume_text': 'Studied biology'}
         generate.return_value = Questions(questions=['A question?'] * 5)
         self.assertEqual(self.client.post('/api/questions', json=background).status_code, 200)
         self.assertIn('Studied biology', generate.call_args.args[0])
@@ -81,34 +80,12 @@ class EndpointTests(unittest.TestCase):
                 quoted_example='An answer', suggested_rewrite='An answer')
                 if path == '/api/answer-feedback' else Feedback(feedback='Helpful feedback'))
             self.assertEqual(self.client.post(path, json={**background, **extra}).status_code, 200)
-            self.assertIn('Built community projects', generate.call_args.args[0])
+            self.assertIn('Studied biology', generate.call_args.args[0])
 
     @patch('main.generate')
     def test_invalid_background_is_rejected(self, generate):
-        for extra in [{'linkedin_url': 'https://linkedin.com.evil.example/in/a'},
-                      {'resume_text': 'x' * 20001}, {'linkedin_text': []}]:
+        for extra in [{'resume_text': 'x' * 20001}, {'resume_text': []}]:
             self.assertEqual(self.client.post('/api/questions', json={**self.context, **extra}).status_code, 400)
-        generate.assert_not_called()
-
-    @patch('main.generate')
-    def test_linkedin_review_without_interview_setup(self, generate):
-        from main import LinkedInReview, ProfileSection
-        missing = ProfileSection(original='', score=None, explanation='Not provided', suggestion=None)
-        generate.return_value = LinkedInReview(
-            headline=ProfileSection(original='Student building web apps', score=6,
-                                    explanation='Clarify your focus.', suggestion='Web app builder | Student'),
-            about=missing, experience=missing, skills=missing,
-            strengths=['Clear focus', 'Concise', 'Identifies student status'],
-            improvements=['Add About', 'Add experience', 'List skills'])
-        response = self.client.post('/api/linkedin-review', json={'linkedin_text': 'Student building web apps'})
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json['overall_score'], 60)
-        self.assertIsNone(response.json['about']['score'])
-        self.assertIn('Student building web apps', generate.call_args.args[0])
-
-    @patch('main.generate')
-    def test_linkedin_review_requires_profile_text(self, generate):
-        self.assertEqual(self.client.post('/api/linkedin-review', json={'linkedin_text': ' '}).status_code, 400)
         generate.assert_not_called()
 
     @patch('main.generate')

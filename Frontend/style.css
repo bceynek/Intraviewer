@@ -944,3 +944,20 @@ body.focus-mode .interview-workspace {
   #mock-call .camera-coach-live [role=status],.camera-coach-live [data-coach-tip] p { font-size:10px; }
   .mock-toolbar>div { grid-template-columns:repeat(2,1fr); }
 }
+
+/* Expanded results stay inside the existing professional profile workspace. */
+#linkedin-review { padding:30px; border-top:1px solid var(--line); font-size:14px; line-height:1.7; overflow-wrap:anywhere; }
+#linkedin-review h3 { font-size:20px; font-weight:500; }
+#linkedin-review h4 { font-size:15px; font-weight:500; margin:16px 0 8px; }
+#linkedin-review ul { padding-left:20px; margin-bottom:20px; }
+.linkedin-overall { color:var(--blue); font-size:20px; margin-top:12px; }
+.linkedin-score-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; margin:20px 0; }
+.linkedin-card { padding:20px; border:1px solid var(--line); background:var(--wash); }
+#linkedin-review .linkedin-card h4 { margin-top:0; }
+.linkedin-rewrite { margin:16px 0; }
+.linkedin-rewrite p { white-space:pre-wrap; margin-bottom:12px; }
+.linkedin-rewrite button { margin-right:12px; }
+@media(max-width:750px) {
+  #linkedin-review { padding:24px; }
+  .linkedin-score-grid { grid-template-columns:1fr; }
+}

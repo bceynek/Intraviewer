@@ -70,10 +70,18 @@ class EndpointTests(unittest.TestCase):
 
     @patch('main.generate')
     def test_linkedin_review_without_interview_setup(self, generate):
-        generate.return_value = Feedback(feedback='Clarify your headline.')
+        from main import LinkedInReview, ProfileSection
+        missing = ProfileSection(original='', score=None, explanation='Not provided', suggestion=None)
+        generate.return_value = LinkedInReview(
+            headline=ProfileSection(original='Student building web apps', score=6,
+                                    explanation='Clarify your focus.', suggestion='Web app builder | Student'),
+            about=missing, experience=missing, skills=missing,
+            strengths=['Clear focus', 'Concise', 'Identifies student status'],
+            improvements=['Add About', 'Add experience', 'List skills'])
         response = self.client.post('/api/linkedin-review', json={'linkedin_text': 'Student building web apps'})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json['feedback'], 'Clarify your headline.')
+        self.assertEqual(response.json['overall_score'], 60)
+        self.assertIsNone(response.json['about']['score'])
         self.assertIn('Student building web apps', generate.call_args.args[0])
 
     @patch('main.generate')

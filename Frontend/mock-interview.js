@@ -6,7 +6,7 @@
   const preflight = document.createElement("section");
   preflight.className = "mock-preflight full-width";
   preflight.innerHTML = `
-    <div class="mock-preflight-portrait"><img src="ivanthegoat.png" alt="Intra Ivan, your AI interviewer" width="1920" height="1080"></div>
+    <div class="mock-preflight-portrait"><img src="images/ivanthegoat.png" alt="Intra Ivan, your AI interviewer" width="1920" height="1080"></div>
     <div><p class="eyebrow">YOUR INTERVIEWER / INTRA IVAN</p><h3>A real rehearsal.</h3>
     <p>Join an AI interview simulation. Listen, take your time, and select Done Answering when you’re ready to move on.</p>
     <div class="mock-device-tests"><button type="button" class="quiet" id="mock-test-mic">Test microphone</button><button type="button" class="quiet" id="mock-test-speaker">Test speaker</button><button type="button" class="quiet" id="mock-preview-camera" aria-pressed="false">Enable camera</button></div>
@@ -21,7 +21,7 @@
   call.innerHTML = `
     <header class="mock-call-header"><div><p class="eyebrow">INTRAVIEWER / INTERVIEW ROOM</p><h2 id="mock-title">Mock Interview</h2></div><div class="mock-session-meta"><span id="mock-progress"></span><time id="mock-timer" aria-label="Elapsed interview time">00:00</time></div></header>
     <div class="mock-stage" id="mock-stage">
-      <img id="mock-interviewer" src="ivanthegoat.png" alt="Intra Ivan, AI interviewer" width="1920" height="1080">
+      <img id="mock-interviewer" src="images/ivanthegoat.png" alt="Intra Ivan, AI interviewer" width="1920" height="1080">
       <span class="mock-nameplate">Intra Ivan <span>AI interviewer</span></span>
       <div class="mock-self"><video id="mock-camera" autoplay muted playsinline hidden aria-label="Your camera preview"></video><div id="mock-camera-off"><span>YOU</span><p>Camera off</p></div><span class="mock-self-label">You · preview</span></div>
       <div id="mock-captions" class="mock-captions" aria-live="off" hidden></div>

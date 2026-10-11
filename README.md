@@ -119,7 +119,7 @@ workspaces. No frontend build step is needed.
 Select **Mock interview**, set the role and experience, and use **Join Interview**.
 The pre-call panel offers a microphone input meter, a speaker test through the
 existing ElevenLabs endpoint, and an optional local camera preview. The call uses
-`Frontend/intraviewerlogo.png` as the still Intra Ivan interviewer image.
+`Frontend/images/ivanthegoat.png` as the still Intra Ivan interviewer image.
 
 Questions play automatically using the existing `createNarrator` service. Only
 actual playback animates the image; captions use phrase estimates against the

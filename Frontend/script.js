@@ -155,7 +155,7 @@ function createNarrator(feedback, kind = "feedback") {
   feedback.after(panel);
   let text = "", url = null, controller = null;
   const narrator = {
-    audio,
+    audio, panel, status, button,
     start() { button.click(); },
     stop() {
       if (controller) controller.abort();
@@ -285,6 +285,10 @@ const speechReady = speechAvailable
 speechStatus.textContent = speechReady;
 speechNote.hidden = !speechAvailable;
 
+function notifyDictation(type, error = "") {
+  window.dispatchEvent(new CustomEvent("interview-dictation", {detail: {type, error}}));
+}
+
 function syncSpeechControls() {
   speechButton.disabled = !speechAvailable || speechStopping || answerBox.disabled || answerAccepted;
   submitButton.disabled = Boolean(recognition) || loadingAnswer || answerAccepted || !answerBox.value.trim();
@@ -323,7 +327,10 @@ speechButton.addEventListener("click", () => {
   speechStatus.textContent = "Requesting microphone access…";
   syncSpeechControls();
   session.onstart = () => {
-    if (recognition === session && !speechStopping) speechStatus.textContent = "Listening… Speak your response, then select Stop recording.";
+    if (recognition === session && !speechStopping) {
+      speechStatus.textContent = "Listening… Speak your response, then select Stop recording.";
+      notifyDictation("start");
+    }
   };
   session.onresult = event => {
     if (recognition !== session) return;
@@ -341,6 +348,7 @@ speechButton.addEventListener("click", () => {
     }
     speechPreview.textContent = interim ? `Hearing: ${interim}` : "";
     syncSpeechControls();
+    notifyDictation("result");
     if (limitReached && !speechStopping) {
       speechStopping = true;
       syncSpeechControls();
@@ -358,6 +366,7 @@ speechButton.addEventListener("click", () => {
       "no-speech": "No speech was detected. Select Start speaking to try again."
     };
     speechStatus.textContent = messages[event.error] || "Speech recognition stopped. You can try again or type your response.";
+    notifyDictation("error", event.error);
   };
   session.onend = () => {
     if (recognition !== session) return;
@@ -370,11 +379,13 @@ speechButton.addEventListener("click", () => {
       ? "Response reached the 10,000-character limit. Review your text before submitting."
       : "Recording stopped. Review your response, or select Start speaking to add more.";
     syncSpeechControls();
+    notifyDictation("end");
   };
   try { session.start(); }
   catch {
     cancelDictation();
     speechStatus.textContent = "Could not start the microphone. Try again or type your response.";
+    notifyDictation("error");
   }
 });
 new MutationObserver(syncSpeechControls).observe(answerBox, {attributes: true, attributeFilter: ["disabled"]});
@@ -476,6 +487,10 @@ setupForm.addEventListener("submit", async function (event) {
   };
 
   mode = modeSelect.value;
+  if (mode === "mock") {
+    window.mockInterview.join(interviewContext);
+    return;
+  }
 
   loadingQuestions = true;
   startButton.disabled = true;
@@ -756,6 +771,7 @@ async function getFeedback() {
   try {
     const result = await postJSON("/api/feedback", {
       ...interviewContext,
+      ...(mode === "mock" ? {mode: "mock"} : {}),
       answers: answers.map(function (item) {
         return {
           question: item.question,

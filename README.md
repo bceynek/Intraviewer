@@ -113,3 +113,71 @@ session storage. All AI actions use the existing server-side Gemini configuratio
 The interface uses IBM Plex Sans with system fallbacks, CSS-only scroll motion,
 reduced-motion support, keyboard-operable document tabs, and responsive stacked
 workspaces. No frontend build step is needed.
+
+## Immersive Mock Interview
+
+Select **Mock interview**, set the role and experience, and use **Join Interview**.
+The pre-call panel offers a microphone input meter, a speaker test through the
+existing ElevenLabs endpoint, and an optional local camera preview. The call uses
+`Frontend/intraviewerlogo.png` as the still Intra Ivan interviewer image.
+
+Questions play automatically using the existing `createNarrator` service. Only
+actual playback animates the image; captions use phrase estimates against the
+MP3 playhead because the narration endpoint supplies no word alignment. Delivered
+questions cannot replay. Failed or interrupted playback has a recovery action.
+
+Answers use the existing browser SpeechRecognition implementation. Select
+**Done Answering** to finalize and submit: pauses do not automatically submit.
+Mute stops recognition; speech errors preserve finalized text and offer retry.
+Text entry remains available in browsers without speech recognition. Camera
+tracks are local, optional, and released when disabled, when the tab is hidden,
+or when the call ends. This application does not record camera video.
+
+End Interview preserves recorded turns and requests feedback, including for an
+incomplete interview. `/api/feedback` accepts 1–15 turns with `mode: "mock"`;
+the original five-answer contract and prompt remain unchanged for Guided Practice.
+State is kept in browser memory, so reloading still clears the session.
+
+The mock controller is isolated in `Frontend/mock-interview.js`. It reuses the
+existing speech services and AI endpoints; no new provider or key is required.
+
+Browser regression checks are in `tests/mock_browser.py`. They connect to a local
+Chrome instance on debugging port 9223 and use a temporary local HTTP server,
+fixture audio, simulated speech recognition, and Chrome fake camera/microphone
+flags. They cover complete and early-ended interviews, contextual follow-ups,
+failed submissions, audio recovery, no replay, cleanup, Guided Practice,
+responsive layouts, and reduced motion. They do not verify live provider output
+or real hardware. Manual verification should cover actual microphone dictation,
+ElevenLabs audio, browser permissions and autoplay behavior on the target browser.
+
+## Camera coaching (Mock Interview only)
+
+Enable **Camera coaching · live tips + a review** and turn on the camera in
+pre-call setup, or use **Camera tips on** in the call toolbar. Select **Calibrate**
+and look comfortably toward the lens for three seconds. Calibration is personal
+to that camera position; turning the camera or coaching off clears it.
+
+The optional on-device coach looks for sustained framing problems, an absent
+face, changes in calibrated head/iris direction, and repeated wrist/shoulder
+movement. Short glances and gestures do not immediately prompt tips. Live cues
+have a cooldown, and the post-interview review summarizes observed episodes.
+Look-away estimates are not validated eye tracking. Movement may be deliberate
+gesturing or camera movement, not necessarily fidgeting. No confidence, attention,
+emotion, identity, or interview-ability score is inferred.
+
+Pinned MediaPipe Tasks Vision 0.10.18 and versioned face/pose models are bundled
+under `Frontend/vendor/mediapipe` (about 28 MB, including SIMD and non-SIMD WASM).
+They load only when coaching and the camera are enabled. All frame inference
+runs in a local worker; frames are released after processing and are never sent
+to an API or saved. Only in-memory cue counts are retained for the review, kept
+separate from Gemini answer feedback. Camera-off and hidden-tab intervals are
+excluded. Model failure leaves the interview usable with an explicit retry hint.
+
+`camera-signals.js` contains the calibrated heuristics, `camera-coach-worker.js`
+runs the local models, and `camera-coach.js` manages the opt-in UI and summary.
+Guided Practice retains its original workflow. `tests/camera_browser.py` checks
+calibration, persistence thresholds, cue counts, actual local model loading and
+frame inference, camera cleanup, and review/reset behavior. Use the same Chrome
+fake-device and debugging setup as the other browser tests. Real-user gaze and
+movement accuracy still require validation across cameras, lighting, glasses,
+and individual movement patterns; these are optional rehearsal suggestions.

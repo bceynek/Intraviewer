@@ -257,6 +257,132 @@ let conversation = [];
 let roundTurns = [];
 let activePrompt = "";
 
+// Dictation appends finalized speech; unfinished words stay in a separate preview.
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+const speechPanel = document.createElement("div");
+speechPanel.className = "speech-controls";
+const speechButton = document.createElement("button");
+speechButton.type = "button";
+speechButton.className = "quiet";
+speechButton.textContent = "Start speaking";
+speechButton.setAttribute("aria-pressed", "false");
+const speechStatus = createMessage(speechPanel);
+speechStatus.className = "help";
+const speechPreview = document.createElement("p");
+speechPreview.className = "help";
+const speechNote = document.createElement("p");
+speechNote.className = "help";
+speechNote.textContent = "Speak in English, then stop to review and submit. Your browser may send audio to its transcription service.";
+speechPanel.prepend(speechButton);
+speechPanel.append(speechPreview, speechNote);
+answerBox.after(speechPanel);
+let recognition = null;
+let speechStopping = false;
+const speechAvailable = Boolean(SpeechRecognition) && window.isSecureContext;
+const speechReady = speechAvailable
+  ? "Use your microphone or type your response."
+  : "Speech-to-text is unavailable here. Try a supported browser on HTTPS or localhost, or type your response.";
+speechStatus.textContent = speechReady;
+speechNote.hidden = !speechAvailable;
+
+function syncSpeechControls() {
+  speechButton.disabled = !speechAvailable || speechStopping || answerBox.disabled || answerAccepted;
+  submitButton.disabled = Boolean(recognition) || loadingAnswer || answerAccepted || !answerBox.value.trim();
+}
+function cancelDictation() {
+  const previous = recognition;
+  recognition = null; // Ignore late results from a previous question or session.
+  speechStopping = false;
+  if (previous) previous.abort();
+  speechButton.textContent = "Start speaking";
+  speechButton.setAttribute("aria-pressed", "false");
+  speechPreview.textContent = "";
+  speechStatus.textContent = speechReady;
+  syncSpeechControls();
+}
+speechButton.addEventListener("click", () => {
+  if (recognition) {
+    speechStopping = true;
+    speechButton.textContent = "Stopping…";
+    speechStatus.textContent = "Finishing transcription…";
+    syncSpeechControls();
+    recognition.stop();
+    return;
+  }
+  if (!speechAvailable || loadingAnswer || answerAccepted || answerBox.disabled) return;
+  narrators.forEach(narrator => narrator.stop());
+  const session = new SpeechRecognition();
+  session.lang = "en-US";
+  session.continuous = true;
+  session.interimResults = true;
+  recognition = session;
+  let failed = false;
+  let limitReached = false;
+  speechButton.textContent = "Stop recording";
+  speechButton.setAttribute("aria-pressed", "true");
+  speechStatus.textContent = "Requesting microphone access…";
+  syncSpeechControls();
+  session.onstart = () => {
+    if (recognition === session && !speechStopping) speechStatus.textContent = "Listening… Speak your response, then select Stop recording.";
+  };
+  session.onresult = event => {
+    if (recognition !== session) return;
+    let interim = "";
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      const result = event.results[i];
+      if (result.isFinal) {
+        const text = result[0].transcript.trim();
+        const combined = answerBox.value + (answerBox.value && !/\s$/.test(answerBox.value) ? " " : "") + text;
+        answerBox.value = combined.slice(0, answerBox.maxLength);
+        if (combined.length >= answerBox.maxLength) limitReached = true;
+      } else {
+        interim += result[0].transcript;
+      }
+    }
+    speechPreview.textContent = interim ? `Hearing: ${interim}` : "";
+    syncSpeechControls();
+    if (limitReached && !speechStopping) {
+      speechStopping = true;
+      syncSpeechControls();
+      session.stop();
+    }
+  };
+  session.onerror = event => {
+    if (recognition !== session) return;
+    failed = true;
+    const messages = {
+      "not-allowed": "Microphone access was denied. Allow it in your browser settings, or type your response.",
+      "service-not-allowed": "Speech recognition is blocked by your browser. You can still type your response.",
+      "audio-capture": "No microphone is available. Connect one and try again, or type your response.",
+      "network": "The transcription service could not connect. Check your connection and try again.",
+      "no-speech": "No speech was detected. Select Start speaking to try again."
+    };
+    speechStatus.textContent = messages[event.error] || "Speech recognition stopped. You can try again or type your response.";
+  };
+  session.onend = () => {
+    if (recognition !== session) return;
+    recognition = null;
+    speechStopping = false;
+    speechButton.textContent = "Start speaking";
+    speechButton.setAttribute("aria-pressed", "false");
+    speechPreview.textContent = "";
+    if (!failed) speechStatus.textContent = limitReached
+      ? "Response reached the 10,000-character limit. Review your text before submitting."
+      : "Recording stopped. Review your response, or select Start speaking to add more.";
+    syncSpeechControls();
+  };
+  try { session.start(); }
+  catch {
+    cancelDictation();
+    speechStatus.textContent = "Could not start the microphone. Try again or type your response.";
+  }
+});
+new MutationObserver(syncSpeechControls).observe(answerBox, {attributes: true, attributeFilter: ["disabled"]});
+window.addEventListener("pagehide", cancelDictation);
+document.addEventListener("visibilitychange", () => { if (document.hidden) cancelDictation(); });
+narrators.forEach(narrator => narrator.audio.addEventListener("play", cancelDictation));
+syncSpeechControls();
+
 // Call the Python backend.
 async function postJSON(url, data) {
   let response;
@@ -409,6 +535,7 @@ setupForm.addEventListener("submit", async function (event) {
 
 // Display one question.
 function showQuestion() {
+  cancelDictation();
   guidedNarrator.set();
   answerAccepted = false;
   roundTurns = [];
@@ -443,6 +570,7 @@ function showQuestion() {
 
 answerBox.addEventListener("input", function () {
   submitButton.disabled =
+    Boolean(recognition) ||
     loadingAnswer ||
     answerAccepted ||
     answerBox.value.trim() === "";
@@ -453,6 +581,7 @@ submitButton.addEventListener("click", async function () {
   const answer = answerBox.value.trim();
 
   if (
+    recognition ||
     loadingAnswer ||
     answerAccepted ||
     !answer ||
@@ -576,6 +705,7 @@ function advanceQuestion() {
 
 // Display the saved answers.
 function showResults() {
+  cancelDictation();
   questionNarrator.set();
   guidedNarrator.set();
   interviewScreen.hidden = true;
@@ -652,6 +782,7 @@ retryButton.addEventListener("click", getFeedback);
 restartButton.addEventListener("click", function () {
   if (loadingFeedback || loadingAnswer) return;
 
+  cancelDictation();
   narrators.forEach(narrator => narrator.set());
   questions = [];
   answers = [];
@@ -759,6 +890,7 @@ focusToggle.addEventListener("click", () => {
   focusToggle.textContent = enabled ? "Exit focus mode" : "Focus mode";
 });
 document.getElementById("exit-interview").addEventListener("click", () => {
+  cancelDictation();
   document.body.classList.remove("focus-mode");
   focusToggle.setAttribute("aria-pressed", "false");
   focusToggle.textContent = "Focus mode";
